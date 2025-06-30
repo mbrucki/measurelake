@@ -11,11 +11,12 @@ const app = express();
 // --- Configuration ---
 const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
 const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
+const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const PORT = process.env.PORT || 8080;
 
-if (!GTM_ID || !GTM_SERVER_URL) {
-    console.error('FATAL: GTM_ID and GTM_SERVER_URL environment variables must be set.');
+if (!GTM_ID || !GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
+    console.error('FATAL: GTM_ID, GTM_SERVER_URL, and MEASURELAKE_API_KEY environment variables must be set.');
     process.exit(1);
 }
 
@@ -55,7 +56,10 @@ async function updateEncryptionKey() {
         const referer = new URL(GTM_SERVER_URL).origin;
         console.log(`Fetching key with Referer: ${referer}`);
         const response = await axios.get(KEY_API_URL, {
-            headers: { 'Referer': referer }
+            headers: { 
+                'Referer': referer,
+                'Authorization': `Bearer ${MEASURELAKE_API_KEY}`
+            }
         });
         if (response.data && response.data.key && response.data.key_expiry) {
             encryptionKey = response.data.key;

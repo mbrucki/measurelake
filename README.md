@@ -32,6 +32,7 @@ Before you begin, you'll need:
 4. **Set environment variables**:
    - `GTM_SERVER_URL`: Your GTM server URL (e.g., `https://sgtm.yourdomain.com`)
    - `GTM_ID`: Your GTM container ID (e.g., `GTM-XXXXXXX`)
+   - `MEASURELAKE_API_KEY`: Your API key for the encryption service (provided by MeasureLake)
 5. **Deploy the service**
 6. **Note your service URL** (e.g., `https://your-service-abc123.run.app`)
 
