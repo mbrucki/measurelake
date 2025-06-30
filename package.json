@@ -1,18 +1,23 @@
 {
-  "name": "gtm-proxy",
+  "name": "partytracking",
   "version": "1.0.0",
   "description": "A server-side decryption proxy for Google Tag Manager first-party mode.",
   "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {},
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {
-    "axios": "^1.7.2",
-    "express": "^4.19.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
   "author": "MeasureLake",
-  "license": "ISC"
+  "license": "ISC",
+  "keywords": [
+    "gtm",
+    "proxy",
+    "first-party"
+  ]
 } 
