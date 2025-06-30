@@ -36,8 +36,14 @@ const keyManager = {
     async fetchKey() {
         console.log('Fetching new encryption key...');
         try {
+            // The API expects a Referer header to identify the client.
+            const referer = new URL(GTM_SERVER_URL).origin;
+
             const response = await axios.get(KEY_API_URL, {
-                headers: { 'X-API-Key': MEASURELAKE_API_KEY }
+                headers: { 
+                    'X-API-Key': MEASURELAKE_API_KEY,
+                    'Referer': referer 
+                }
             });
 
             if (response.data && response.data.key && response.data.key_expiry) {
