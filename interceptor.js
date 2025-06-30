@@ -1,11 +1,15 @@
 (function () {
     // Self-executing function to avoid polluting the global namespace
 
+    // Dynamically determine the base URL of the proxy service from the script's own src.
+    const scriptSrc = document.currentScript.src;
+    const PROXY_BASE_URL = new URL(scriptSrc).origin;
+
     // --- Configuration ---
     // The base path for the proxy endpoint on this service.
     const PROXY_PATH_PREFIX = '/proxy';
     // The endpoint on this service that provides the public encryption key.
-    const KEY_API_ENDPOINT = '/api/get-key';
+    const KEY_API_ENDPOINT = `${PROXY_BASE_URL}/api/get-key`;
 
 
     let encryptionKey = null;
@@ -94,7 +98,7 @@
             const relativePathWithQuery = urlObject.pathname.substring(1) + urlObject.search; // e.g., 'gtm.js?id=GTM-XXXX'
             const encryptedFragment = await encrypt(relativePathWithQuery);
             
-            const newUrl = `${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
+            const newUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
             console.log(`GTM Proxy: Rerouting ${originalUrl} -> ${newUrl}`);
             return newUrl;
 
@@ -130,7 +134,7 @@
              if (isCollectionRequest) {
                 const relativePathWithQuery = urlObject.pathname.substring(1) + urlObject.search; // 'g/collect?v=2...'
                 const encryptedFragment = await encrypt(relativePathWithQuery);
-                finalResource = `${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
+                finalResource = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
                 console.log(`GTM Proxy: Rerouting fetch ${resource} -> ${finalResource}`);
 
                 if (init.method && ['POST','PUT','PATCH'].includes(init.method.toUpperCase()) && init.body && typeof init.body === 'string') {
