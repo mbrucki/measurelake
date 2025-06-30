@@ -87,6 +87,14 @@ async function ensureKey() {
 
 // --- API and Static Endpoints ---
 
+// Enable CORS for all routes
+app.use(cors({
+    origin: true, // Allow any origin
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+}));
+
 // Read the loader script template once on startup
 let loaderScriptTemplate = '';
 try {
