@@ -28,13 +28,18 @@ function decrypt(encryptedString, key) {
     try {
         const parts = encryptedString.split(':');
         if (parts.length !== 2) throw new Error('Invalid encrypted string format.');
+        
         const iv = Buffer.from(parts[0], 'hex');
-        const encryptedData = parts[1];
+        const encryptedData = Buffer.from(parts[1], 'hex');
+        
+        // The last 16 bytes of the encrypted data is the auth tag
+        const tag = encryptedData.slice(-16);
+        const ciphertext = encryptedData.slice(0, -16);
+        
         const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'utf8'), iv);
-        const tag = Buffer.from(encryptedData.slice(-32), 'hex');
         decipher.setAuthTag(tag);
-        const encryptedContent = Buffer.from(encryptedData.slice(0, -32), 'hex');
-        let decrypted = decipher.update(encryptedContent, 'hex', 'utf-8');
+        
+        let decrypted = decipher.update(ciphertext, 'binary', 'utf-8');
         decrypted += decipher.final('utf-8');
         return decrypted;
     } catch (error) {
@@ -110,7 +115,7 @@ app.get('/api/get-key', cors(), async (req, res) => {
     }
 });
 
-app.use(express.raw({type: '*/*'}));
+app.use(express.raw({type: 'text/plain'}));
 
 // --- Main Proxy Endpoint ---
 app.all('/load/:encryptedFragment', async (req, res) => {
@@ -119,6 +124,20 @@ app.all('/load/:encryptedFragment', async (req, res) => {
     try {
         const currentKey = await ensureKey();
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
+
+        // Handle encrypted body for POST/PUT requests
+        let requestBody = req.body;
+        if ((req.method === 'POST' || req.method === 'PUT') && req.body && req.body.length > 0) {
+            console.log('GTM Proxy: Decrypting request body...');
+            try {
+                const bodyAsString = req.body.toString('utf-8');
+                requestBody = decrypt(bodyAsString, currentKey);
+            } catch(e) {
+                console.error('GTM Proxy: Failed to decrypt request body.', e.message);
+                // Decide if you want to forward with undecrypted body or return an error
+                return res.status(400).send('Bad Request: Body decryption failed.');
+            }
+        }
 
         const [decryptedPath, decryptedQuery] = decryptedFragment.split('?');
         
@@ -142,7 +161,7 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         const response = await axios({
             method: req.method,
             url: targetUrl.toString(),
-            data: req.method !== 'GET' && req.body.length > 0 ? req.body : null,
+            data: (req.method !== 'GET' && req.method !== 'HEAD' && requestBody) ? requestBody : null,
             headers: {
                 ...req.headers,
                 host: targetUrl.hostname,

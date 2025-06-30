@@ -28,7 +28,7 @@
         return await fetchEncryptionKey();
     }
 
-    async function encrypt(dataString) {
+    async function encryptUrl(dataString) {
         if (!encryptionKey) {
             encryptionKey = await getEncryptionKey();
             if (!encryptionKey) throw new Error("Encryption key not available.");
@@ -40,10 +40,23 @@
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, data);
         const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
-        const encryptedData = new Uint8Array(encrypted);
-        const tag = encryptedData.slice(-16);
-        const ciphertext = encryptedData.slice(0, -16);
-        const encryptedHex = Array.from(ciphertext).map(b => b.toString(16).padStart(2, '0')).join('') + Array.from(tag).map(b => b.toString(16).padStart(2, '0')).join('');
+        const encryptedHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return `${ivHex}:${encryptedHex}`;
+    }
+
+    async function encryptPayload(payloadString) {
+        if (!encryptionKey) {
+            encryptionKey = await getEncryptionKey();
+            if (!encryptionKey) throw new Error("Encryption key not available.");
+        }
+        const encoder = new TextEncoder();
+        const data = encoder.encode(payloadString);
+        const keyBytes = encoder.encode(encryptionKey);
+        const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, data);
+        const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+        const encryptedHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
         return `${ivHex}:${encryptedHex}`;
     }
 
@@ -53,7 +66,7 @@
         }
         console.log('GTM Proxy: Intercepting URL:', url);
         const relativePath = url.substring(GTM_SERVER_URL.length);
-        const encryptedFragment = await encrypt(relativePath);
+        const encryptedFragment = await encryptUrl(relativePath);
         const finalUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
         console.log(`GTM Proxy: Rerouting to: ${finalUrl}`);
         return finalUrl;
@@ -96,15 +109,23 @@
 
     const originalFetch = window.fetch;
     window.fetch = async function (resource, init = {}) {
+        let finalResource = resource;
+        let finalInit = { ...init };
+
         if (typeof resource === 'string' && resource.includes(GTM_SERVER_URL)) {
-            const finalResource = await modifyUrl(resource);
-            const finalInit = { ...init };
-            if (finalInit.body && (finalInit.method === 'POST' || finalInit.method === 'PUT')) {
-                finalInit.body = await encrypt(finalInit.body);
+            console.log('GTM Proxy: Intercepting fetch:', resource);
+            finalResource = await modifyUrl(resource);
+
+            if (finalInit.body && (String(finalInit.method).toUpperCase() === 'POST' || String(finalInit.method).toUpperCase() === 'PUT')) {
+                 if (typeof finalInit.body === 'string') {
+                    console.log('GTM Proxy: Encrypting fetch payload.');
+                    finalInit.body = await encryptPayload(finalInit.body);
+                 } else {
+                    console.warn('GTM Proxy: Fetch body is not a string, cannot encrypt.');
+                 }
             }
-            return originalFetch.call(this, finalResource, finalInit);
         }
-        return originalFetch.call(this, resource, init);
+        return originalFetch.call(this, finalResource, finalInit);
     };
 
     (async function initialize() {
