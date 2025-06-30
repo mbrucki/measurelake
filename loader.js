@@ -6,6 +6,7 @@
     const KEY_API_ENDPOINT = `${PROXY_BASE_URL}/api/get-key`;
     let encryptionKey = null;
 
+    // Define all functions first before setting up interception
     async function fetchEncryptionKey() {
         try {
             const response = await fetch(KEY_API_ENDPOINT);
@@ -72,34 +73,48 @@
         return finalUrl;
     }
 
-    // Override document.createElement to intercept src assignments via the .src property or setAttribute.
+    // NOW set up all interception AFTER functions are defined
+    console.log('GTM Proxy: Setting up immediate interception for:', GTM_SERVER_URL);
+
+    // Override document.createElement FIRST
     const originalCreateElement = document.createElement;
     document.createElement = function (tagName, options) {
         const element = originalCreateElement.call(this, tagName, options);
 
         if (tagName.toLowerCase() === 'script') {
-            // First, grab the original setAttribute method before we override it.
             const originalSetAttribute = element.setAttribute.bind(element);
-
-            // Now, override setAttribute to intercept 'src' changes.
-            element.setAttribute = async function (name, value) {
-                if (name.toLowerCase() === 'src') {
-                    const finalUrl = await modifyUrl(value);
-                    originalSetAttribute(name, finalUrl);
+            element.setAttribute = function (name, value) {
+                if (name.toLowerCase() === 'src' && typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+                    console.log('GTM Proxy: Intercepting createElement setAttribute src:', value);
+                    // Use a promise-based approach but don't block
+                    modifyUrl(value).then(modifiedUrl => {
+                        originalSetAttribute(name, modifiedUrl);
+                    }).catch(error => {
+                        console.error('GTM Proxy: createElement setAttribute error:', error);
+                        originalSetAttribute(name, value);
+                    });
+                    return; // Don't call original
                 } else {
                     originalSetAttribute(name, value);
                 }
             };
 
-            // Finally, define a custom setter for the 'src' property.
-            // This setter will call our overridden setAttribute method, ensuring all logic is unified.
             Object.defineProperty(element, 'src', {
                 get: function () {
                     return this.getAttribute('src');
                 },
                 set: function (value) {
-                    // This calls our custom, overridden setAttribute method above.
-                    element.setAttribute('src', value);
+                    if (typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+                        console.log('GTM Proxy: Intercepting createElement src property:', value);
+                        modifyUrl(value).then(modifiedUrl => {
+                            this.setAttribute('src', modifiedUrl);
+                        }).catch(error => {
+                            console.error('GTM Proxy: createElement src property error:', error);
+                            this.setAttribute('src', value);
+                        });
+                    } else {
+                        this.setAttribute('src', value);
+                    }
                 },
                 configurable: true
             });
@@ -107,20 +122,19 @@
         return element;
     };
 
-    // Override appendChild to catch script elements being added to the DOM
+    // Override appendChild IMMEDIATELY
     const originalAppendChild = Node.prototype.appendChild;
     Node.prototype.appendChild = function(child) {
         if (child.tagName === 'SCRIPT' && child.src && child.src.includes(GTM_SERVER_URL)) {
             console.log('GTM Proxy: Intercepting appendChild script:', child.src);
-            // Prevent the script from loading by clearing the src first
             const originalSrc = child.src;
-            child.src = ''; // Clear src to prevent immediate load
+            child.src = ''; // Clear to prevent load
             modifyUrl(originalSrc).then(modifiedUrl => {
                 child.src = modifiedUrl;
                 originalAppendChild.call(this, child);
             }).catch(error => {
-                console.error('GTM Proxy: Error modifying script URL in appendChild:', error);
-                child.src = originalSrc; // Restore original on error
+                console.error('GTM Proxy: appendChild error:', error);
+                child.src = originalSrc;
                 originalAppendChild.call(this, child);
             });
             return child;
@@ -128,19 +142,19 @@
         return originalAppendChild.call(this, child);
     };
 
-    // Override insertBefore to catch script elements being inserted
+    // Override insertBefore IMMEDIATELY  
     const originalInsertBefore = Node.prototype.insertBefore;
     Node.prototype.insertBefore = function(newNode, referenceNode) {
         if (newNode.tagName === 'SCRIPT' && newNode.src && newNode.src.includes(GTM_SERVER_URL)) {
             console.log('GTM Proxy: Intercepting insertBefore script:', newNode.src);
             const originalSrc = newNode.src;
-            newNode.src = ''; // Clear src to prevent immediate load
+            newNode.src = '';
             modifyUrl(originalSrc).then(modifiedUrl => {
                 newNode.src = modifiedUrl;
                 originalInsertBefore.call(this, newNode, referenceNode);
             }).catch(error => {
-                console.error('GTM Proxy: Error modifying script URL in insertBefore:', error);
-                newNode.src = originalSrc; // Restore original on error
+                console.error('GTM Proxy: insertBefore error:', error);
+                newNode.src = originalSrc;
                 originalInsertBefore.call(this, newNode, referenceNode);
             });
             return newNode;
@@ -148,25 +162,7 @@
         return originalInsertBefore.call(this, newNode, referenceNode);
     };
 
-    // Override XMLHttpRequest for additional coverage
-    const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...args) {
-        if (typeof url === 'string' && url.includes(GTM_SERVER_URL)) {
-            console.log('GTM Proxy: Intercepting XHR:', url);
-            // Store the original arguments and defer the call
-            const xhr = this;
-            modifyUrl(url).then(modifiedUrl => {
-                console.log('GTM Proxy: XHR URL modified to:', modifiedUrl);
-                originalXHROpen.call(xhr, method, modifiedUrl, ...args);
-            }).catch(error => {
-                console.error('GTM Proxy: Error modifying XHR URL:', error);
-                originalXHROpen.call(xhr, method, url, ...args);
-            });
-            return;
-        }
-        return originalXHROpen.call(this, method, url, ...args);
-    };
-
+    // Override fetch IMMEDIATELY
     const originalFetch = window.fetch;
     window.fetch = async function (resource, init = {}) {
         let finalResource = resource;
@@ -188,6 +184,26 @@
         }
         return originalFetch.call(this, finalResource, finalInit);
     };
+
+    // Override XMLHttpRequest IMMEDIATELY
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        if (typeof url === 'string' && url.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting XHR:', url);
+            const xhr = this;
+            modifyUrl(url).then(modifiedUrl => {
+                console.log('GTM Proxy: XHR URL modified to:', modifiedUrl);
+                originalXHROpen.call(xhr, method, modifiedUrl, ...args);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying XHR URL:', error);
+                originalXHROpen.call(xhr, method, url, ...args);
+            });
+            return;
+        }
+        return originalXHROpen.call(this, method, url, ...args);
+    };
+
+    console.log('GTM Proxy: Immediate interception setup complete.');
 
     (async function initialize() {
         window.dataLayer = window.dataLayer || [];
@@ -211,4 +227,57 @@
 
     // Add a global listener to catch any requests we might have missed
     console.log('GTM Proxy: All interception methods initialized.');
+
+    // Add MutationObserver to catch any script elements we might have missed
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'SCRIPT' && node.src && node.src.includes(GTM_SERVER_URL)) {
+                        console.log('GTM Proxy: MutationObserver caught unintercepted script:', node.src);
+                        const originalSrc = node.src;
+                        modifyUrl(originalSrc).then(modifiedUrl => {
+                            console.log('GTM Proxy: MutationObserver modifying script URL to:', modifiedUrl);
+                            node.src = modifiedUrl;
+                        }).catch(error => {
+                            console.error('GTM Proxy: MutationObserver error modifying URL:', error);
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+    // Start observing
+    observer.observe(document, { childList: true, subtree: true });
+    console.log('GTM Proxy: MutationObserver started.');
+
+    // Override Image constructor in case GTM uses it for tracking pixels
+    const OriginalImage = window.Image;
+    window.Image = function(...args) {
+        const img = new OriginalImage(...args);
+        const originalSrcDescriptor = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src') || {};
+        const originalSetter = originalSrcDescriptor.set;
+        
+        if (originalSetter) {
+            Object.defineProperty(img, 'src', {
+                set: function(value) {
+                    if (typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+                        console.log('GTM Proxy: Intercepting Image src:', value);
+                        modifyUrl(value).then(modifiedUrl => {
+                            originalSetter.call(this, modifiedUrl);
+                        }).catch(error => {
+                            console.error('GTM Proxy: Error modifying Image URL:', error);
+                            originalSetter.call(this, value);
+                        });
+                    } else {
+                        originalSetter.call(this, value);
+                    }
+                },
+                get: originalSrcDescriptor.get,
+                configurable: true
+            });
+        }
+        return img;
+    };
 })(); 
