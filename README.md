@@ -1,112 +1,46 @@
-# GTM Server-Side Path Obfuscation Proxy
+# GTM First-Party Proxy Service
 
-This Node.js application acts as a path-obfuscation proxy for an existing Google Tag Manager (GTM) Server-Side Container. It is designed to defeat advanced, path-based ad blockers, making your server-side setup even more resilient.
+This project provides a containerized Node.js application that acts as a server-side proxy for Google Tag Manager (GTM). Its primary purpose is to serve GTM assets (`gtm.js`, `gtag.js`, etc.) and forward analytics data from a first-party context, making tracking more resilient to ad-blockers and third-party cookie restrictions.
 
-## The Problem it Solves
+The service dynamically serves a single JavaScript file that intercepts all GTM-related requests, encrypts their paths, and routes them through this proxy. The proxy then forwards them to Google's `fps.goog` first-party serving infrastructure.
 
-Standard GTM server-side tagging is a great way to avoid domain-based ad blockers by serving tags from a first-party context (e.g., `sgtm.my-site.com`). However, some ad blockers have started to identify and block requests based on common URL paths, such as `/gtm.js` or `/g/collect`, even when served from your own domain.
+## Deployment
 
-This service sits in front of your GTM server-side container to solve this. It encrypts the GTM request path, making it unrecognizable to ad blockers.
+This service is designed to be deployed as a container, for example using Google Cloud Run.
 
-## How it Works
+### Prerequisites
 
-1.  **Client-Side Integration**: You add a single `<script>` tag to your website, before your standard GTM snippet.
-2.  **Interceptor Script**: This script intercepts requests destined for your GTM server-side container.
-3.  **On-the-Fly Encryption**: It encrypts the request's path (e.g., `/gtm.js?id=...`) into an unrecognizable string.
-4.  **Proxying & Decryption**: The encrypted request is sent to this proxy service. The service decrypts the path and forwards the original, clean request to your GTM server-side container.
+-   A Google Cloud project.
+-   `gcloud` CLI installed and authenticated.
+-   A GitHub repository with the code.
 
-## Integration Guide
+### From GitHub
 
-This service is designed to work with an existing GTM Server-Side Container and is highly effective at bypassing ad blockers that use path-based filtering.
+You can deploy this service directly from your GitHub repository using Google Cloud Build.
 
-To integrate, simply add the following script tag to the `<head>` section of your website. This single line replaces your entire GTM snippet.
-
-```html
-<!-- GTM Obfuscation Proxy Loader -->
-<!--    Replace <YOUR_DEPLOYED_PROXY_URL> with the URL of this service -->
-<script async src="https://<YOUR_DEPLOYED_PROXY_URL>/"></script>
-```
-
-**How it works:** This script dynamically generates and injects the Google Tag Manager setup into your page. It handles the `dataLayer` initialization, encrypts the path to the `gtm.js` file, and loads it securely through the proxy, making the entire process invisible to path-based ad blockers.
+1.  Go to your Google Cloud Console and navigate to Cloud Build.
+2.  Create a new trigger.
+3.  Connect your GitHub repository.
+4.  Configure the trigger to use the `Dockerfile` in the root of the repository for the build.
+5.  Set up a "Push to branch" event (e.g., for the `main` branch).
+6.  In the "Advanced" section, under "Substitution variables," you must add the environment variables required for the service to run.
 
 ## Environment Variables
 
-| Variable                | Description                                                                                              | Example                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `GTM_SERVER_URL`        | **Required.** The full URL of your existing GTM Server-Side Container.                                   | `https://sgtm.your-site.com`                                         |
-| `GTM_ID`                | **Required.** Your Google Tag Manager Container ID.                                                      | `GTM-XXXXXXX`                                                        |
-| `MEASURELAKE_API_KEY`   | **Required.** The secret API key needed to authenticate with the key management service.                 | `your-secret-api-key`                                                |
-| `PORT`                  | The port the application will listen on. This is set automatically by Cloud Run. Defaults to `8080`.      | `8080`                                                               |
+The container is configured using the following environment variables:
 
-## Deployment to Google Cloud Run
+-   `GTM_ID` (Required): Your Google Tag Manager container ID (e.g., `GTM-XXXXXXX`).
+-   `CANONICAL_HOSTNAME` (Required): The full domain name of the website where this GTM container is deployed (e.g., `www.example.com`). This is used to securely fetch the correct encryption key for your domain.
+-   `PORT`: The port the application will listen on. This is usually set automatically by the hosting platform (like Cloud Run). Defaults to `8080`.
 
-There are two ways to deploy this service. The recommended method is to deploy directly from a GitHub repository, which enables continuous deployment.
+## How It Works
 
-### Method 1: Deploy from GitHub (Recommended)
+1.  **Client-Side Integration**: You place a single `<script>` tag on your website pointing to the root (`/`) of this deployed service.
+2.  **Dynamic Script Generation**: The service responds with a dynamically generated JavaScript file. This script is pre-configured with your `GTM_ID`.
+3.  **Interception**: The client-side script overrides `document.createElement` and `window.fetch` to intercept any attempt by your website to load GTM assets or send analytics data.
+4.  **Encryption**: Before making a request, the script encrypts the path and query parameters of the original Google URL (e.g., `/gtm.js?id=GTM-XXXXXXX`).
+5.  **Proxy Request**: The script sends the encrypted data to the `/load/:encryptedFragment` endpoint of this service.
+6.  **Decryption & Forwarding**: The service decrypts the fragment using a shared secret key and forwards the original, reconstructed request to Google's dedicated first-party serving domain (`[GTM_ID].fps.goog`).
+7.  **Response**: The response from Google is streamed back to the client, making the proxy transparent.
 
-This method uses Google Cloud Buildpacks to automatically build and deploy your service.
-
-1.  **Fork this Repository**: Click the "Fork" button at the top of this page to create a copy of this repository in your own GitHub account.
-2.  **Go to Google Cloud Run**: In the Google Cloud Console, navigate to the Cloud Run section.
-3.  **Create Service**: Click "Create service".
-4.  **Configure Service**:
-    *   Select **"Continuously deploy new revisions from a source repository"**.
-    *   Click **"Set up with Cloud Build"**. This will open a new panel.
-    *   In the Cloud Build panel, select `GitHub` as the source provider. Authenticate and select your forked repository.
-    *   In the "Build Configuration" section, choose the `Go, Node.js, Python, Java, .NET Core, Ruby, PHP` buildpack option. The source location should be `/`.
-    *   Click "Save".
-5.  **Set Service Name and Region**: Give your service a name (e.g., `gtm-obfuscation-proxy`) and choose a region.
-6.  **Configure Environment Variables**:
-    *   Under the "Variables & Secrets" section, add the required environment variables:
-        *   `GTM_SERVER_URL`: Your GTM server-side container's URL.
-        *   `GTM_ID`: Your GTM Container ID.
-        *   `MEASURELAKE_API_KEY`: It is **highly recommended** to add this as a secret by clicking "Reference a secret".
-7.  **Finalize and Deploy**:
-    *   Under "Authentication", select **"Allow unauthenticated invocations"**.
-    *   Click **"Create"**.
-
-Cloud Run will now pull the code from your repository, build the container, and deploy it. Any future pushes to your main branch will automatically trigger a new deployment.
-
-### Method 2: Deploy using the gcloud CLI
-
-This method requires you to have the `gcloud` CLI installed and a Dockerfile.
-
-1.  **Clone the repository.**
-2.  **Run the gcloud command**:
-    ```sh
-    export PROJECT_ID="your-gcp-project-id"
-    gcloud config set project $PROJECT_ID
-    
-    # ... (Enable services and create Artifact Registry repo as needed) ...
-
-    export IMAGE_NAME="gtm-obfuscation-proxy"
-    export REGION="us-central1" # Or your preferred region
-    export IMAGE_TAG="${REGION}-docker.pkg.dev/${PROJECT_ID}/<your-repo-name>/${IMAGE_NAME}:latest"
-
-    # Build and submit
-    gcloud builds submit --tag $IMAGE_TAG
-    ```
-3.  **Deploy to Cloud Run:**
-    *It is strongly recommended to use Secret Manager for `MEASURELAKE_API_KEY`.*
-
-    **Method A: Setting Environment Variables Directly (Less Secure)**
-
-    ```sh
-    gcloud run deploy $IMAGE_NAME \
-        --image=$IMAGE_TAG \
-        --platform=managed \
-        --region=$REGION \
-        --allow-unauthenticated \
-        --set-env-vars="GTM_SERVER_URL=https://sgtm.your-site.com,GTM_ID=GTM-XXXXXXX,MEASURELAKE_API_KEY=your-secret-api-key"
-    ```
-
-    **Method B: Setting Environment Variables Directly (Less Secure)**
-
-    ```sh
-    gcloud run deploy $IMAGE_NAME \
-        --image=$IMAGE_TAG \
-        --platform=managed \
-        --region=$REGION \
-        --allow-unauthenticated \
-        --set-env-vars="GTM_SERVER_URL=https://sgtm.your-site.com,GTM_ID=GTM-XXXXXXX,MEASURELAKE_API_KEY=your-secret-api-key"
-    ``` 
+This process ensures that from the browser's perspective, all GTM-related traffic is sent to your own domain, enhancing privacy and durability. 

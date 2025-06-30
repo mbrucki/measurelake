@@ -10,11 +10,12 @@ const app = express();
 
 // --- Configuration ---
 const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
+const CANONICAL_HOSTNAME = process.env.CANONICAL_HOSTNAME ? process.env.CANONICAL_HOSTNAME.trim() : null;
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const PORT = process.env.PORT || 8080;
 
-if (!GTM_ID) {
-    console.error('FATAL: GTM_ID environment variable is not set.');
+if (!GTM_ID || !CANONICAL_HOSTNAME) {
+    console.error('FATAL: GTM_ID and CANONICAL_HOSTNAME environment variables must be set.');
     process.exit(1);
 }
 
@@ -46,8 +47,10 @@ function decrypt(encryptedString, key) {
 async function updateEncryptionKey() {
     console.log('Attempting to fetch new encryption key...');
     try {
+        const referer = `https://${CANONICAL_HOSTNAME}`;
+        console.log(`Fetching key with Referer: ${referer}`);
         const response = await axios.get(KEY_API_URL, {
-            headers: { 'Referer': 'https://partytracking-app' }
+            headers: { 'Referer': referer }
         });
         if (response.data && response.data.key && response.data.key_expiry) {
             encryptionKey = response.data.key;
