@@ -140,7 +140,7 @@ app.all('/proxy/:encrypted_fragment', async (req, res) => {
 
         // 1. Decrypt URL fragment
         const { encrypted_fragment } = req.params;
-        const decrypted_fragment = decrypt(encrypted_fragment, key);
+        const decrypted_full_path = decrypt(encrypted_fragment, key);
 
         // 2. Decrypt body if present
         let decryptedBody = req.body;
@@ -160,11 +160,15 @@ app.all('/proxy/:encrypted_fragment', async (req, res) => {
              }
         }
         
-        // 3. Construct the target URL for the client's GTM Server
+        // Split the decrypted full path into a path and a query string
+        const [decrypted_path, decrypted_query_string] = decrypted_full_path.split('?');
+
+        // 3. Construct the target URL for the client's GTM Server-Side Container
         const targetUrlObject = new URL(GTM_SERVER_URL);
-        const queryString = new URLSearchParams(req.query).toString();
-        targetUrlObject.pathname = path.join(targetUrlObject.pathname, decrypted_fragment);
-        targetUrlObject.search = queryString;
+        // Safely join the base path from the GTM_SERVER_URL with the decrypted path
+        targetUrlObject.pathname = path.join(targetUrlObject.pathname, decrypted_path);
+        // Set the search parameters from the decrypted query string
+        targetUrlObject.search = decrypted_query_string || '';
         
         const targetUrl = targetUrlObject.toString();
         
