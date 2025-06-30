@@ -102,7 +102,8 @@
             console.log('GTM Proxy: Initialized successfully. Loading GTM...');
             const gtmScript = document.createElement('script');
             gtmScript.async = true;
-            gtmScript.src = `${GTM_SERVER_URL}/gtm.js?id=${GTM_ID}`;
+            const gtmUrl = new URL(`gtm.js?id=${GTM_ID}`, GTM_SERVER_URL);
+            gtmScript.src = gtmUrl.href;
             document.head.appendChild(gtmScript);
         } else {
             console.error('GTM Proxy: Initialization failed, key not retrieved.');
