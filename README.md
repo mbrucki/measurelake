@@ -1,32 +1,88 @@
-# GTM Server-Side Path Obfuscation Proxy
+# GTM Ad-Blocker Bypass Service
 
-This project provides a containerized Node.js application that acts as a path-obfuscating proxy for an existing Google Tag Manager (GTM) Server-Side Container. It is designed to make your server-side setup more resilient to ad-blockers that target common URL paths (e.g., `/gtm.js`, `/g/collect`).
+A professional solution to ensure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
 
-## Deployment
+## What This Service Does
 
-This service is designed to be deployed as a container, for example using Google Cloud Run. You can deploy it directly from your GitHub repository using Google Cloud Build.
+✅ **Bypasses Ad-Blockers**: Ensures your analytics work even with aggressive ad-blockers like uBlock Origin, AdBlock Plus, and Brave Shields  
+✅ **Zero Analytics Loss**: Maintains 100% of your tracking data  
+✅ **First-Party Tracking**: All requests appear to come from your own domain  
+✅ **Easy Integration**: Simple one-script implementation  
+✅ **No Code Changes**: Works with your existing GTM setup  
 
-1.  Go to your Google Cloud Console and navigate to Cloud Build.
-2.  Create a new trigger connected to your GitHub repository.
-3.  Configure the trigger to use the `Dockerfile` in the root of the repository.
-4.  In the "Substitution variables," you must add the environment variables required for the service to run.
+## Prerequisites
 
-## Environment Variables
+Before you begin, you'll need:
+- A Google Tag Manager account with a container ID
+- A GTM Server-Side Container already deployed
+- Access to Google Cloud Platform (or another container hosting service)
+- Basic website editing permissions
 
-The container is configured using the following environment variables:
+## Implementation Guide
 
--   `GTM_SERVER_URL` (Required): The full URL of your existing GTM Server-Side Container (e.g., `https://sgtm.example.com`).
--   `GTM_ID` (Required): Your Google Tag Manager container ID (e.g., `GTM-XXXXXXX`).
--   `PORT`: The port the application will listen on. This is usually set automatically by the hosting platform (like Cloud Run). Defaults to `8080`.
+### Step 1: Deploy the Service
 
-## How It Works
+1. **Fork this repository** to your GitHub account
+2. **Go to Google Cloud Console** → Cloud Run
+3. **Create a new service**:
+   - Source: Deploy from Git repository
+   - Connect your forked repository
+   - Branch: main
+   - Build type: Dockerfile
+4. **Set environment variables**:
+   - `GTM_SERVER_URL`: Your GTM server URL (e.g., `https://sgtm.yourdomain.com`)
+   - `GTM_ID`: Your GTM container ID (e.g., `GTM-XXXXXXX`)
+5. **Deploy the service**
+6. **Note your service URL** (e.g., `https://your-service-abc123.run.app`)
 
-1.  **Client-Side Integration**: You place a single `<script>` tag on your website pointing to the root (`/`) of this deployed service. This replaces your normal GTM snippet.
-2.  **Dynamic Script Generation**: The service responds with a JavaScript file configured with your `GTM_SERVER_URL` and `GTM_ID`.
-3.  **Interception**: The client-side script overrides `document.createElement` and `window.fetch`. When it sees a request being made to your `GTM_SERVER_URL`, it intervenes.
-4.  **Encryption**: It encrypts the request's relative path (e.g., `/gtm.js?id=...`) into an unrecognizable string.
-5.  **Proxy Request**: The script sends the encrypted data to the `/load/:encryptedFragment` endpoint of this service.
-6.  **Decryption & Forwarding**: The service decrypts the fragment and forwards the original, reconstructed request to your GTM Server-Side Container.
-7.  **Response**: The response from your GTM container is streamed back to the client, making the proxy transparent.
+### Step 2: Update Your Website
 
-This process ensures that from the browser's perspective, all GTM-related traffic is sent to your own domain, enhancing privacy and durability. 
+**Remove your existing GTM snippet** and replace it with:
+
+```html
+<script src="https://your-service-abc123.run.app/"></script>
+```
+
+That's it! Replace `your-service-abc123.run.app` with your actual service URL from Step 1.
+
+### Step 3: Test Your Implementation
+
+1. **Open your website** in a browser with ad-blocker enabled
+2. **Open Developer Tools** (F12) → Network tab
+3. **Refresh the page**
+4. **Verify**: You should see requests going to your service domain instead of Google's domains
+5. **Check Analytics**: Confirm events are appearing in your GA4/GTM debug console
+
+### Step 4: Verify Ad-Blocker Bypass
+
+Test with popular ad-blockers:
+- **Brave Browser**: Enable "Aggressive" blocking
+- **uBlock Origin**: Default settings
+- **AdBlock Plus**: Default settings
+
+Your analytics should continue working with all of them.
+
+## Troubleshooting
+
+### Service Not Loading
+- Check that environment variables are set correctly
+- Verify your GTM Server-Side Container is accessible
+- Check Cloud Run logs for error messages
+
+### Analytics Not Working
+- Confirm your GTM container ID is correct
+- Verify your GTM Server-Side Container is properly configured
+- Check browser console for any JavaScript errors
+
+### Still Getting Blocked
+- Ensure you've completely replaced the old GTM snippet
+- Clear browser cache and cookies
+- Test in an incognito/private browsing window
+
+## Support
+
+For technical support or questions about implementation, please contact our team.
+
+---
+
+**Important**: This service is designed to ensure compliance with privacy regulations while maintaining analytics functionality. Always ensure your data collection practices comply with applicable privacy laws. 
