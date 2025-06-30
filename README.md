@@ -19,33 +19,22 @@ This service sits in front of your GTM server-side container to solve this. It e
 
 This service is designed to work with an existing GTM Server-Side Container and is highly effective at bypassing ad blockers that use path-based filtering.
 
-On your website, replace your standard GTM snippet with the two script tags below. They must be placed in the `<head>` section, in this specific order.
+To integrate, simply add the following script tag to the `<head>` section of your website. This single line replaces your entire GTM snippet.
 
 ```html
-<!-- 1. GTM Path Obfuscation Interceptor -->
+<!-- GTM Obfuscation Proxy Loader -->
 <!--    Replace <YOUR_DEPLOYED_PROXY_URL> with the URL of this service -->
-<script async src="https://<YOUR_DEPLOYED_PROXY_URL>/interceptor.js"></script>
-
-<!-- 2. Modified GTM Configuration Snippet -->
-<!--    Replace GTM-XXXXXXX with your actual GTM Container ID -->
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  // This line pushes the GTM ID to the dataLayer, where our interceptor
-  // will find it and use it to load GTM via the proxy.
-  gtag('config', 'GTM-XXXXXXX');
-</script>
+<script async src="https://<YOUR_DEPLOYED_PROXY_URL>/"></script>
 ```
 
-**How it works:** The traditional GTM snippet is blocked because it explicitly loads a `.../gtm.js` file. This modified snippet avoids that. It only *configures* the GTM ID. The `interceptor.js` script then reads this ID from the `dataLayer` and securely loads the `gtm.js` file through the encrypted proxy, bypassing the ad blocker.
+**How it works:** This script dynamically generates and injects the Google Tag Manager setup into your page. It handles the `dataLayer` initialization, encrypts the path to the `gtm.js` file, and loads it securely through the proxy, making the entire process invisible to path-based ad blockers.
 
 ## Environment Variables
 
 | Variable                | Description                                                                                              | Example                                                              |
 | ----------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `GTM_SERVER_URL`        | **Required.** The full URL of your existing GTM Server-Side Container.                                   | `https://sgtm.your-site.com`                                         |
+| `GTM_ID`                | **Required.** Your Google Tag Manager Container ID.                                                      | `GTM-XXXXXXX`                                                        |
 | `MEASURELAKE_API_KEY`   | **Required.** The secret API key needed to authenticate with the key management service.                 | `your-secret-api-key`                                                |
 | `PORT`                  | The port the application will listen on. This is set automatically by Cloud Run. Defaults to `8080`.      | `8080`                                                               |
 
@@ -70,6 +59,7 @@ This method uses Google Cloud Buildpacks to automatically build and deploy your 
 6.  **Configure Environment Variables**:
     *   Under the "Variables & Secrets" section, add the required environment variables:
         *   `GTM_SERVER_URL`: Your GTM server-side container's URL.
+        *   `GTM_ID`: Your GTM Container ID.
         *   `MEASURELAKE_API_KEY`: It is **highly recommended** to add this as a secret by clicking "Reference a secret".
 7.  **Finalize and Deploy**:
     *   Under "Authentication", select **"Allow unauthenticated invocations"**.
@@ -99,12 +89,24 @@ This method requires you to have the `gcloud` CLI installed and a Dockerfile.
 3.  **Deploy to Cloud Run:**
     *It is strongly recommended to use Secret Manager for `MEASURELAKE_API_KEY`.*
 
+    **Method A: Setting Environment Variables Directly (Less Secure)**
+
     ```sh
     gcloud run deploy $IMAGE_NAME \
         --image=$IMAGE_TAG \
         --platform=managed \
         --region=$REGION \
         --allow-unauthenticated \
-        --set-env-vars="GTM_SERVER_URL=https://sgtm.your-site.com" \
-        --set-secrets="MEASURELAKE_API_KEY=your-secret-key-name:latest"
+        --set-env-vars="GTM_SERVER_URL=https://sgtm.your-site.com,GTM_ID=GTM-XXXXXXX,MEASURELAKE_API_KEY=your-secret-api-key"
+    ```
+
+    **Method B: Setting Environment Variables Directly (Less Secure)**
+
+    ```sh
+    gcloud run deploy $IMAGE_NAME \
+        --image=$IMAGE_TAG \
+        --platform=managed \
+        --region=$REGION \
+        --allow-unauthenticated \
+        --set-env-vars="GTM_SERVER_URL=https://sgtm.your-site.com,GTM_ID=GTM-XXXXXXX,MEASURELAKE_API_KEY=your-secret-api-key"
     ``` 

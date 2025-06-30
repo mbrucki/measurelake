@@ -5,14 +5,15 @@ const path = require('path');
 
 // --- Configuration from Environment Variables ---
 const GTM_SERVER_URL = process.env.GTM_SERVER_URL;
+const GTM_ID = process.env.GTM_ID;
 // The Key API URL is fixed and not configurable by the user.
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY;
 const PORT = process.env.PORT || 8080;
 
 // --- Validate Configuration ---
-if (!GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
-    console.error('Missing required environment variables: GTM_SERVER_URL, MEASURELAKE_API_KEY must be set.');
+if (!GTM_SERVER_URL || !MEASURELAKE_API_KEY || !GTM_ID) {
+    console.error('Missing required environment variables: GTM_SERVER_URL, GTM_ID, MEASURELAKE_API_KEY must be set.');
     process.exit(1);
 }
 
@@ -130,10 +131,111 @@ app.use(express.text({ type: '*/*' }));
 
 // --- API and Static Endpoints ---
 
-// Endpoint to serve the client-side interceptor script
-app.get('/interceptor.js', (req, res) => {
+// NEW: Endpoint to serve the dynamic, all-in-one loader script from the root
+app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
-    res.sendFile(path.join(__dirname, 'interceptor.js'));
+    
+    // Dynamically generate the client-side script
+    const clientScript = `
+(function () {
+    const GTM_ID = '${GTM_ID}';
+    const PROXY_BASE_URL = new URL(document.currentScript.src).origin;
+    const PROXY_PATH_PREFIX = '/load';
+    const KEY_API_ENDPOINT = \`\${PROXY_BASE_URL}/api/get-key\`;
+    let encryptionKey = null;
+
+    // Initialize dataLayer
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', GTM_ID);
+    console.log('GTM Proxy: dataLayer initialized for', GTM_ID);
+
+    async function fetchEncryptionKey() {
+        try {
+            const response = await fetch(KEY_API_ENDPOINT);
+            if (!response.ok) throw new Error(\`Failed to fetch key: \${response.status}\`);
+            const data = await response.json();
+            sessionStorage.setItem('gtmfpm_encryptionKey', data.key);
+            sessionStorage.setItem('gtmfpm_keyExpiry', data.expiry);
+            console.log('GTM Proxy: Encryption key loaded.');
+            return data.key;
+        } catch (error) {
+            console.error('GTM Proxy: Error fetching key:', error);
+            return null;
+        }
+    }
+
+    async function getEncryptionKey() {
+        const cachedKey = sessionStorage.getItem('gtmfpm_encryptionKey');
+        const expiry = sessionStorage.getItem('gtmfpm_keyExpiry');
+        if (cachedKey && expiry && new Date(expiry) > new Date()) return cachedKey;
+        return await fetchEncryptionKey();
+    }
+
+    async function encrypt(dataString) {
+        if (!encryptionKey) {
+            encryptionKey = await getEncryptionKey();
+            if (!encryptionKey) throw new Error("Encryption key not available.");
+        }
+        const encoder = new TextEncoder();
+        const data = encoder.encode(dataString);
+        const keyBytes = encoder.encode(encryptionKey);
+        const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, data);
+        const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
+        const encryptedHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
+        return \`\${ivHex}:\${encryptedHex}\`;
+    }
+
+    const originalFetch = window.fetch;
+    window.fetch = async function (resource, init = {}) {
+        let finalResource = resource;
+        if (typeof resource === 'string') {
+            const urlObject = new URL(resource);
+            const isCollectionRequest = urlObject.pathname.includes('/g/collect');
+            if (isCollectionRequest) {
+                const relativePathWithQuery = urlObject.pathname.substring(1) + urlObject.search;
+                const encryptedFragment = await encrypt(relativePathWithQuery);
+                finalResource = \`\${PROXY_BASE_URL}\${PROXY_PATH_PREFIX}/\${encodeURIComponent(encryptedFragment)}\`;
+                console.log(\`GTM Proxy: Rerouting fetch \${resource} -> \${finalResource}\`);
+                if (init.method && ['POST','PUT','PATCH'].includes(init.method.toUpperCase()) && init.body && typeof init.body === 'string') {
+                    try {
+                        init.body = await encrypt(init.body);
+                    } catch (err) {
+                        console.error('GTM Proxy: Error encrypting payload:', err);
+                    }
+                }
+            }
+        }
+        return originalFetch.call(this, finalResource, init);
+    };
+
+    async function loadGtm() {
+        console.log(\`GTM Proxy: Encrypting and loading GTM...\`);
+        const gtmPath = \`gtm.js?id=\${GTM_ID}\`;
+        const encryptedFragment = await encrypt(gtmPath);
+        const finalUrl = \`\${PROXY_BASE_URL}\${PROXY_PATH_PREFIX}/\${encodeURIComponent(encryptedFragment)}\`;
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = finalUrl;
+        document.head.appendChild(script);
+        console.log(\`GTM Proxy: GTM script injected with URL: \${finalUrl}\`);
+    }
+
+    (async function initialize() {
+        encryptionKey = await getEncryptionKey();
+        if(encryptionKey) {
+            console.log('GTM Proxy: Initialized successfully.');
+            await loadGtm();
+        } else {
+            console.error('GTM Proxy: Initialization failed, key not retrieved.');
+        }
+    })();
+})();
+    `;
+    res.send(clientScript);
 });
 
 // Endpoint for the client-side script to fetch the public key details
@@ -152,7 +254,7 @@ app.get('/api/get-key', async (req, res) => {
     }
 });
 
-app.all('/proxy/:encrypted_fragment', async (req, res) => {
+app.all('/load/:encrypted_fragment', async (req, res) => {
     try {
         const key = await keyManager.getKey();
         if (!key) {
@@ -247,7 +349,7 @@ app.get('/health', (req, res) => {
 // --- Server Start ---
 app.listen(PORT, () => {
     console.log(`GTM Obfuscation Proxy listening on port ${PORT}`);
-    console.log(`Forwarding requests to GTM Server URL: ${GTM_SERVER_URL}`);
+    console.log(`Forwarding requests to GTM Server URL: ${GTM_SERVER_URL} for GTM ID: ${GTM_ID}`);
     
     // Perform an initial key fetch in the background. 
     // This allows the server to start immediately and handle health checks
