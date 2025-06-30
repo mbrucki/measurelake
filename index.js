@@ -118,10 +118,24 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         const currentKey = await ensureKey();
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
 
+        // Correctly parse the decrypted fragment into path and query
+        const [decryptedPath, decryptedQuery] = decryptedFragment.split('?');
+        
         const upstreamHost = `${GTM_ID}.fps.goog`;
         const targetUrl = new URL(`https://${upstreamHost}`);
-        targetUrl.pathname += `/${decryptedFragment}`;
+        
+        // Set the pathname, avoiding any double slashes.
+        targetUrl.pathname = decryptedPath;
 
+        // Add query params from the decrypted fragment
+        if (decryptedQuery) {
+            const params = new URLSearchParams(decryptedQuery);
+            params.forEach((value, key) => {
+                targetUrl.searchParams.append(key, value);
+            });
+        }
+        
+        // Add any query params that were on the proxy URL itself (if any)
         Object.keys(req.query).forEach(key => {
             targetUrl.searchParams.append(key, req.query[key]);
         });
