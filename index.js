@@ -156,7 +156,9 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 
         res.status(response.status);
         Object.keys(response.headers).forEach(key => {
-            if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-length') {
+            // We must preserve the content-encoding header from the upstream response.
+            // We let express handle transfer-encoding and content-length.
+            if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-length') {
                 res.setHeader(key, response.headers[key]);
             }
         });
