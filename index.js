@@ -162,14 +162,21 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 
 // --- Server Initialization ---
 (async () => {
-    await updateEncryptionKey();
-    setInterval(updateEncryptionKey, 60 * 60 * 1000);
-
+    // Start the server immediately. This ensures the container is responsive to
+    // Cloud Run health checks even if the initial key fetch fails.
     app.listen(PORT, () => {
-        if (isKeyValid()) {
-            console.log(`Server listening on port ${PORT}. GTM_ID: ${GTM_ID}. Key is valid.`);
-        } else {
-            console.warn(`Server listening on port ${PORT}. GTM_ID: ${GTM_ID}. WARNING: Key is NOT valid. Service will fail until a key is fetched.`);
-        }
+        console.log(`Server listening on port ${PORT}. GTM_ID: ${GTM_ID}.`);
+        
+        // Attempt the initial key fetch in the background after starting.
+        updateEncryptionKey().then(() => {
+            if (isKeyValid()) {
+                console.log('Initial encryption key fetch successful.');
+            } else {
+                console.warn('Initial encryption key fetch failed. The service will retry.');
+            }
+        });
     });
+
+    // Periodically refresh the key in the background.
+    setInterval(updateEncryptionKey, 60 * 60 * 1000);
 })();
