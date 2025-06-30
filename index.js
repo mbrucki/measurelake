@@ -104,6 +104,27 @@ function decrypt(encryptedText, key) {
 // --- Express App Setup ---
 const app = express();
 
+// --- CORS Middleware ---
+// This must come before the routes to ensure headers are set for all responses.
+app.use((req, res, next) => {
+    // Allow requests from any origin. For a production environment with known
+    // clients, you might want to restrict this to a specific list of domains.
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Allow the browser to send the headers it needs.
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Allow the methods the browser might use.
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS');
+
+    // Handle preflight requests (the browser sends an OPTIONS request first)
+    if (req.method === 'OPTIONS') {
+        return res.status(204).send('');
+    }
+
+    next();
+});
+
 // Middleware to read raw body for POST/PUT/PATCH requests
 app.use(express.text({ type: '*/*' }));
 
@@ -172,6 +193,8 @@ app.all('/proxy/:encrypted_fragment', async (req, res) => {
         
         const targetUrl = targetUrlObject.toString();
         
+        console.log(`Forwarding request to: ${targetUrl}`);
+
         // 4. Forward the request to the client's GTM Server
         const headers = {
             'Host': targetUrlObject.hostname,
