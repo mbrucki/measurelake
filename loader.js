@@ -48,8 +48,7 @@
     }
 
     function getRelativePath(url) {
-        const urlObject = new URL(url);
-        return urlObject.pathname + urlObject.search;
+        return url.substring(GTM_SERVER_URL.length);
     }
 
     const originalCreateElement = document.createElement;
