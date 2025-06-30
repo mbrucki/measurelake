@@ -23,7 +23,6 @@ ENV NODE_ENV=production
 COPY --from=dependencies /usr/src/app/node_modules ./node_modules
 COPY package.json .
 COPY index.js .
-COPY interceptor.js .
 
 # Expose the port the app runs on.
 # The actual port is determined by the PORT environment variable (defaults to 8080).
