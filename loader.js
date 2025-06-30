@@ -280,4 +280,36 @@
         }
         return img;
     };
+
+    // Override Navigator.sendBeacon for analytics requests
+    const originalSendBeacon = navigator.sendBeacon;
+    navigator.sendBeacon = function(url, data) {
+        if (typeof url === 'string' && url.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting sendBeacon:', url);
+            return modifyUrl(url).then(modifiedUrl => {
+                console.log('GTM Proxy: sendBeacon URL modified to:', modifiedUrl);
+                return originalSendBeacon.call(this, modifiedUrl, data);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying sendBeacon URL:', error);
+                return originalSendBeacon.call(this, url, data);
+            });
+        }
+        return originalSendBeacon.call(this, url, data);
+    };
+
+    // Add comprehensive IMG element interception
+    const originalSetAttribute = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function(name, value) {
+        if (this.tagName === 'IMG' && name.toLowerCase() === 'src' && typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting IMG setAttribute src:', value);
+            modifyUrl(value).then(modifiedUrl => {
+                originalSetAttribute.call(this, name, modifiedUrl);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying IMG setAttribute URL:', error);
+                originalSetAttribute.call(this, name, value);
+            });
+            return;
+        }
+        return originalSetAttribute.call(this, name, value);
+    };
 })(); 
