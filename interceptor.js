@@ -83,45 +83,18 @@
 
     // --- Interception Logic ---
 
-    async function getModifiedUrl(originalUrl) {
-         try {
-            if (typeof originalUrl !== 'string') return originalUrl;
-            
-            const urlObject = new URL(originalUrl);
-            const isGtmScript = urlObject.pathname.includes('/gtm.js') || urlObject.pathname.includes('/gtag/js');
+    // This function is no longer needed as we will create the script tag ourselves.
+    // async function getModifiedUrl(originalUrl) { ... }
 
-            // Only intercept GTM scripts
-            if (!isGtmScript) {
-                return originalUrl;
-            }
+    // This is no longer needed as we will create the script tag ourselves.
+    // const originalAppendChild = Element.prototype.appendChild;
+    // Element.prototype.appendChild = function (element) { ... };
 
-            const relativePathWithQuery = urlObject.pathname.substring(1) + urlObject.search; // e.g., 'gtm.js?id=GTM-XXXX'
-            const encryptedFragment = await encrypt(relativePathWithQuery);
-            
-            const newUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
-            console.log(`GTM Proxy: Rerouting ${originalUrl} -> ${newUrl}`);
-            return newUrl;
+    // This is no longer needed as we will create the script tag ourselves.
+    // const originalCreateElement = document.createElement;
+    // document.createElement = function (tagName, options) { ... };
 
-        } catch (error) {
-            console.error('GTM Proxy: Error modifying URL:', error);
-            return originalUrl; // Fallback to original URL on error
-        }
-    }
-
-    // Intercept <script> element additions
-    const originalAppendChild = Element.prototype.appendChild;
-    Element.prototype.appendChild = function (element) {
-        if (element.tagName === 'SCRIPT' && element.src) {
-            getModifiedUrl(element.src).then(modifiedURL => {
-                element.src = modifiedURL;
-                originalAppendChild.call(this, element);
-            });
-            return element;
-        }
-        return originalAppendChild.call(this, element);
-    };
-
-    // Intercept fetch
+    // Intercept fetch - THIS REMAINS THE SAME
     const originalFetch = window.fetch;
     window.fetch = async function (resource, init = {}) {
         let finalResource = resource;
@@ -150,11 +123,38 @@
         return originalFetch.call(this, finalResource, init);
     };
 
+    // --- NEW: GTM Loading Logic ---
+    async function loadGtm() {
+        // Find the GTM ID from the dataLayer
+        const gtmId = window.dataLayer.find(item => item[0] === 'js' || item['gtm.start'])?.i;
+
+        if (!gtmId) {
+            console.error('GTM Proxy: GTM ID not found in dataLayer. Cannot load GTM.');
+            return;
+        }
+
+        console.log(`GTM Proxy: Found GTM ID ${gtmId}. Encrypting and loading...`);
+
+        // Construct the original GTM path
+        const gtmPath = `gtm.js?id=${gtmId}`;
+        const encryptedFragment = await encrypt(gtmPath);
+        const finalUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
+
+        // Create and inject the script tag
+        const script = document.createElement('script');
+        script.async = true;
+        script.src = finalUrl;
+        document.head.appendChild(script);
+
+        console.log(`GTM Proxy: GTM script injected with URL: ${finalUrl}`);
+    }
+
     // --- Initialization ---
     (async function initialize() {
         encryptionKey = await getEncryptionKey();
         if(encryptionKey) {
             console.log('GTM Proxy: Interceptor script initialized successfully.');
+            await loadGtm(); // Load GTM after initialization
         } else {
             console.error('GTM Proxy: Initialization failed. Could not retrieve encryption key.');
         }

@@ -17,23 +17,29 @@ This service sits in front of your GTM server-side container to solve this. It e
 
 ## Integration Guide
 
-This service is designed to work with an existing GTM Server-Side Container.
+This service is designed to work with an existing GTM Server-Side Container and is highly effective at bypassing ad blockers that use path-based filtering.
 
-On your website, add the following two script tags to the `<head>` section. The interceptor must be placed **before** your GTM script.
+On your website, replace your standard GTM snippet with the two script tags below. They must be placed in the `<head>` section, in this specific order.
 
 ```html
 <!-- 1. GTM Path Obfuscation Interceptor -->
 <!--    Replace <YOUR_DEPLOYED_PROXY_URL> with the URL of this service -->
 <script async src="https://<YOUR_DEPLOYED_PROXY_URL>/interceptor.js"></script>
 
-<!-- 2. Your Standard GTM Server-Side Snippet -->
-<!--    This should point to YOUR GTM server-side container URL -->
-<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://sgtm.your-site.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-XXXXXXX');</script>
+<!-- 2. Modified GTM Configuration Snippet -->
+<!--    Replace GTM-XXXXXXX with your actual GTM Container ID -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  // This line pushes the GTM ID to the dataLayer, where our interceptor
+  // will find it and use it to load GTM via the proxy.
+  gtag('config', 'GTM-XXXXXXX');
+</script>
 ```
+
+**How it works:** The traditional GTM snippet is blocked because it explicitly loads a `.../gtm.js` file. This modified snippet avoids that. It only *configures* the GTM ID. The `interceptor.js` script then reads this ID from the `dataLayer` and securely loads the `gtm.js` file through the encrypted proxy, bypassing the ad blocker.
 
 ## Environment Variables
 
