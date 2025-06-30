@@ -59,38 +59,39 @@
         return finalUrl;
     }
 
-    // Override document.createElement to intercept src assignments
+    // Override document.createElement to intercept src assignments via the .src property or setAttribute.
     const originalCreateElement = document.createElement;
     document.createElement = function (tagName, options) {
         const element = originalCreateElement.call(this, tagName, options);
+
         if (tagName.toLowerCase() === 'script') {
-            Object.defineProperty(element, 'src', {
-                get: function() { return this.getAttribute('src'); },
-                set: async function (value) {
+            // First, grab the original setAttribute method before we override it.
+            const originalSetAttribute = element.setAttribute.bind(element);
+
+            // Now, override setAttribute to intercept 'src' changes.
+            element.setAttribute = async function (name, value) {
+                if (name.toLowerCase() === 'src') {
                     const finalUrl = await modifyUrl(value);
-                    this.setAttribute('src', finalUrl);
+                    originalSetAttribute(name, finalUrl);
+                } else {
+                    originalSetAttribute(name, value);
                 }
+            };
+
+            // Finally, define a custom setter for the 'src' property.
+            // This setter will call our overridden setAttribute method, ensuring all logic is unified.
+            Object.defineProperty(element, 'src', {
+                get: function () {
+                    return this.getAttribute('src');
+                },
+                set: function (value) {
+                    // This calls our custom, overridden setAttribute method above.
+                    element.setAttribute('src', value);
+                },
+                configurable: true
             });
         }
         return element;
-    };
-    
-    // Override appendChild as a fallback to catch scripts that might bypass the src setter
-    const originalAppendChild = Element.prototype.appendChild;
-    Element.prototype.appendChild = function(element) {
-        if (element.tagName === 'SCRIPT' && element.src && element.src.includes(GTM_SERVER_URL)) {
-            // This catches scripts that already have their src set before being appended,
-            // for example, if they were created via element.cloneNode().
-            const originalSrc = element.src;
-            // The 'src' setter override will not fire again because the modified URL
-            // will point to the proxy and won't include GTM_SERVER_URL.
-            modifyUrl(originalSrc).then(modifiedSrc => {
-                element.src = modifiedSrc;
-                originalAppendChild.call(this, element);
-            });
-            return element;
-        }
-        return originalAppendChild.call(this, element);
     };
 
     const originalFetch = window.fetch;
