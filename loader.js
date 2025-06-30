@@ -47,10 +47,19 @@
         return `${ivHex}:${encryptedHex}`;
     }
 
-    function getRelativePath(url) {
-        return url.substring(GTM_SERVER_URL.length);
+    async function modifyUrl(url) {
+        if (typeof url !== 'string' || !url.includes(GTM_SERVER_URL)) {
+            return url;
+        }
+        console.log('GTM Proxy: Intercepting URL:', url);
+        const relativePath = url.substring(GTM_SERVER_URL.length);
+        const encryptedFragment = await encrypt(relativePath);
+        const finalUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
+        console.log(`GTM Proxy: Rerouting to: ${finalUrl}`);
+        return finalUrl;
     }
 
+    // Override document.createElement to intercept src assignments
     const originalCreateElement = document.createElement;
     document.createElement = function (tagName, options) {
         const element = originalCreateElement.call(this, tagName, options);
@@ -58,36 +67,43 @@
             Object.defineProperty(element, 'src', {
                 get: function() { return this.getAttribute('src'); },
                 set: async function (value) {
-                    if (typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
-                        console.log('GTM Proxy: Intercepting script load:', value);
-                        const relativePath = getRelativePath(value);
-                        const encryptedFragment = await encrypt(relativePath);
-                        const finalUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
-                        console.log(`GTM Proxy: Rerouting script to: ${finalUrl}`);
-                        this.setAttribute('src', finalUrl);
-                    } else {
-                        this.setAttribute('src', value);
-                    }
+                    const finalUrl = await modifyUrl(value);
+                    this.setAttribute('src', finalUrl);
                 }
             });
         }
         return element;
     };
     
+    // Override appendChild as a fallback to catch scripts that might bypass the src setter
+    const originalAppendChild = Element.prototype.appendChild;
+    Element.prototype.appendChild = function(element) {
+        if (element.tagName === 'SCRIPT' && element.src && element.src.includes(GTM_SERVER_URL)) {
+            // This catches scripts that already have their src set before being appended,
+            // for example, if they were created via element.cloneNode().
+            const originalSrc = element.src;
+            // The 'src' setter override will not fire again because the modified URL
+            // will point to the proxy and won't include GTM_SERVER_URL.
+            modifyUrl(originalSrc).then(modifiedSrc => {
+                element.src = modifiedSrc;
+                originalAppendChild.call(this, element);
+            });
+            return element;
+        }
+        return originalAppendChild.call(this, element);
+    };
+
     const originalFetch = window.fetch;
     window.fetch = async function (resource, init = {}) {
-        let finalResource = resource;
-        let finalInit = init;
         if (typeof resource === 'string' && resource.includes(GTM_SERVER_URL)) {
-             console.log('GTM Proxy: Intercepting fetch:', resource);
-            const relativePath = getRelativePath(resource);
-            const encryptedFragment = await encrypt(relativePath);
-            finalResource = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
+            const finalResource = await modifyUrl(resource);
+            const finalInit = { ...init };
             if (finalInit.body && (finalInit.method === 'POST' || finalInit.method === 'PUT')) {
                 finalInit.body = await encrypt(finalInit.body);
             }
+            return originalFetch.call(this, finalResource, finalInit);
         }
-        return originalFetch.call(this, finalResource, finalInit);
+        return originalFetch.call(this, resource, init);
     };
 
     (async function initialize() {
