@@ -41,6 +41,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 | ----------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | `GTM_SERVER_URL`        | **Required.** The full URL of your existing GTM Server-Side Container.                                   | `https://sgtm.your-site.com`                                         |
 | `MEASURELAKE_API_KEY`   | **Required.** The secret API key needed to authenticate with the key management service.                 | `your-secret-api-key`                                                |
+| `PORT`                  | The port the application will listen on. This is set automatically by Cloud Run. Defaults to `8080`.      | `8080`                                                               |
 
 ## Deployment to Google Cloud Run
 

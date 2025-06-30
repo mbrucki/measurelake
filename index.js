@@ -8,7 +8,7 @@ const GTM_SERVER_URL = process.env.GTM_SERVER_URL;
 // The Key API URL is fixed and not configurable by the user.
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY;
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 
 // --- Validate Configuration ---
 if (!GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
@@ -212,15 +212,15 @@ app.get('/health', (req, res) => {
 });
 
 // --- Server Start ---
-(async () => {
-    try {
-        await keyManager.fetchKey(); // Initial key fetch on startup
-        app.listen(PORT, () => {
-            console.log(`GTM Obfuscation Proxy listening on port ${PORT}`);
-            console.log(`Forwarding requests to GTM Server URL: ${GTM_SERVER_URL}`);
-        });
-    } catch (error) {
-        console.error(`Failed to start server: ${error.message}`);
-        process.exit(1);
-    }
-})(); 
+app.listen(PORT, () => {
+    console.log(`GTM Obfuscation Proxy listening on port ${PORT}`);
+    console.log(`Forwarding requests to GTM Server URL: ${GTM_SERVER_URL}`);
+    
+    // Perform an initial key fetch in the background. 
+    // This allows the server to start immediately and handle health checks
+    // while the key is being fetched. If it fails, the service will
+    // attempt to refetch on the first actual proxy request.
+    keyManager.fetchKey().catch(error => {
+        console.error(`Initial key fetch failed: ${error.message}.`);
+    });
+}); 
