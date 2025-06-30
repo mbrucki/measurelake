@@ -4,11 +4,11 @@ const crypto = require('crypto');
 const path = require('path');
 
 // --- Configuration from Environment Variables ---
-const GTM_SERVER_URL = process.env.GTM_SERVER_URL;
-const GTM_ID = process.env.GTM_ID;
+const GTM_SERVER_URL = (process.env.GTM_SERVER_URL || '').trim();
+const GTM_ID = (process.env.GTM_ID || '').trim();
 // The Key API URL is fixed and not configurable by the user.
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
-const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY;
+const MEASURELAKE_API_KEY = (process.env.MEASURELAKE_API_KEY || '').trim();
 const PORT = process.env.PORT || 8080;
 
 // --- Validate Configuration ---
