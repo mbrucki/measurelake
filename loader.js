@@ -107,6 +107,66 @@
         return element;
     };
 
+    // Override appendChild to catch script elements being added to the DOM
+    const originalAppendChild = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(child) {
+        if (child.tagName === 'SCRIPT' && child.src && child.src.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting appendChild script:', child.src);
+            // Prevent the script from loading by clearing the src first
+            const originalSrc = child.src;
+            child.src = ''; // Clear src to prevent immediate load
+            modifyUrl(originalSrc).then(modifiedUrl => {
+                child.src = modifiedUrl;
+                originalAppendChild.call(this, child);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying script URL in appendChild:', error);
+                child.src = originalSrc; // Restore original on error
+                originalAppendChild.call(this, child);
+            });
+            return child;
+        }
+        return originalAppendChild.call(this, child);
+    };
+
+    // Override insertBefore to catch script elements being inserted
+    const originalInsertBefore = Node.prototype.insertBefore;
+    Node.prototype.insertBefore = function(newNode, referenceNode) {
+        if (newNode.tagName === 'SCRIPT' && newNode.src && newNode.src.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting insertBefore script:', newNode.src);
+            const originalSrc = newNode.src;
+            newNode.src = ''; // Clear src to prevent immediate load
+            modifyUrl(originalSrc).then(modifiedUrl => {
+                newNode.src = modifiedUrl;
+                originalInsertBefore.call(this, newNode, referenceNode);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying script URL in insertBefore:', error);
+                newNode.src = originalSrc; // Restore original on error
+                originalInsertBefore.call(this, newNode, referenceNode);
+            });
+            return newNode;
+        }
+        return originalInsertBefore.call(this, newNode, referenceNode);
+    };
+
+    // Override XMLHttpRequest for additional coverage
+    const originalXHROpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        if (typeof url === 'string' && url.includes(GTM_SERVER_URL)) {
+            console.log('GTM Proxy: Intercepting XHR:', url);
+            // Store the original arguments and defer the call
+            const xhr = this;
+            modifyUrl(url).then(modifiedUrl => {
+                console.log('GTM Proxy: XHR URL modified to:', modifiedUrl);
+                originalXHROpen.call(xhr, method, modifiedUrl, ...args);
+            }).catch(error => {
+                console.error('GTM Proxy: Error modifying XHR URL:', error);
+                originalXHROpen.call(xhr, method, url, ...args);
+            });
+            return;
+        }
+        return originalXHROpen.call(this, method, url, ...args);
+    };
+
     const originalFetch = window.fetch;
     window.fetch = async function (resource, init = {}) {
         let finalResource = resource;
@@ -115,6 +175,7 @@
         if (typeof resource === 'string' && resource.includes(GTM_SERVER_URL)) {
             console.log('GTM Proxy: Intercepting fetch:', resource);
             finalResource = await modifyUrl(resource);
+            console.log('GTM Proxy: Fetch URL modified to:', finalResource);
 
             if (finalInit.body && (String(finalInit.method).toUpperCase() === 'POST' || String(finalInit.method).toUpperCase() === 'PUT')) {
                  if (typeof finalInit.body === 'string') {
@@ -147,4 +208,7 @@
             console.error('GTM Proxy: Initialization failed, key not retrieved.');
         }
     })();
+
+    // Add a global listener to catch any requests we might have missed
+    console.log('GTM Proxy: All interception methods initialized.');
 })(); 
