@@ -1,5 +1,6 @@
 (function () {
     const GTM_ID = '%%GTM_ID%%';
+    const GTM_SERVER_URL = '%%GTM_SERVER_URL%%';
     const PROXY_BASE_URL = new URL(document.currentScript.src).origin;
     const PROXY_PATH_PREFIX = '/load';
     const KEY_API_ENDPOINT = `${PROXY_BASE_URL}/api/get-key`;
@@ -46,6 +47,11 @@
         return `${ivHex}:${encryptedHex}`;
     }
 
+    function getRelativePath(url) {
+        const urlObject = new URL(url);
+        return urlObject.pathname + urlObject.search;
+    }
+
     const originalCreateElement = document.createElement;
     document.createElement = function (tagName, options) {
         const element = originalCreateElement.call(this, tagName, options);
@@ -53,11 +59,10 @@
             Object.defineProperty(element, 'src', {
                 get: function() { return this.getAttribute('src'); },
                 set: async function (value) {
-                    if (typeof value === 'string' && value.includes('googletagmanager.com/')) {
+                    if (typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
                         console.log('GTM Proxy: Intercepting script load:', value);
-                        const urlObject = new URL(value);
-                        const pathAndQuery = urlObject.pathname.substring(1) + urlObject.search;
-                        const encryptedFragment = await encrypt(pathAndQuery);
+                        const relativePath = getRelativePath(value);
+                        const encryptedFragment = await encrypt(relativePath);
                         const finalUrl = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
                         console.log(`GTM Proxy: Rerouting script to: ${finalUrl}`);
                         this.setAttribute('src', finalUrl);
@@ -74,11 +79,10 @@
     window.fetch = async function (resource, init = {}) {
         let finalResource = resource;
         let finalInit = init;
-        if (typeof resource === 'string' && resource.includes('googletagmanager.com/')) {
+        if (typeof resource === 'string' && resource.includes(GTM_SERVER_URL)) {
              console.log('GTM Proxy: Intercepting fetch:', resource);
-            const urlObject = new URL(resource);
-            const pathAndQuery = urlObject.pathname.substring(1) + urlObject.search;
-            const encryptedFragment = await encrypt(pathAndQuery);
+            const relativePath = getRelativePath(resource);
+            const encryptedFragment = await encrypt(relativePath);
             finalResource = `${PROXY_BASE_URL}${PROXY_PATH_PREFIX}/${encodeURIComponent(encryptedFragment)}`;
             if (finalInit.body && (finalInit.method === 'POST' || finalInit.method === 'PUT')) {
                 finalInit.body = await encrypt(finalInit.body);
@@ -99,7 +103,7 @@
             console.log('GTM Proxy: Initialized successfully. Loading GTM...');
             const gtmScript = document.createElement('script');
             gtmScript.async = true;
-            gtmScript.src = `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`;
+            gtmScript.src = `${GTM_SERVER_URL}/gtm.js?id=${GTM_ID}`;
             document.head.appendChild(gtmScript);
         } else {
             console.error('GTM Proxy: Initialization failed, key not retrieved.');

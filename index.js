@@ -10,12 +10,12 @@ const app = express();
 
 // --- Configuration ---
 const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
-const CANONICAL_HOSTNAME = process.env.CANONICAL_HOSTNAME ? process.env.CANONICAL_HOSTNAME.trim() : null;
+const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const PORT = process.env.PORT || 8080;
 
-if (!GTM_ID || !CANONICAL_HOSTNAME) {
-    console.error('FATAL: GTM_ID and CANONICAL_HOSTNAME environment variables must be set.');
+if (!GTM_ID || !GTM_SERVER_URL) {
+    console.error('FATAL: GTM_ID and GTM_SERVER_URL environment variables must be set.');
     process.exit(1);
 }
 
@@ -47,7 +47,7 @@ function decrypt(encryptedString, key) {
 async function updateEncryptionKey() {
     console.log('Attempting to fetch new encryption key...');
     try {
-        const referer = `https://${CANONICAL_HOSTNAME}`;
+        const referer = new URL(GTM_SERVER_URL).origin;
         console.log(`Fetching key with Referer: ${referer}`);
         const response = await axios.get(KEY_API_URL, {
             headers: { 'Referer': referer }
@@ -94,7 +94,9 @@ try {
 // Serve the dynamic loader script from the root
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'application/javascript');
-    const finalScript = loaderScriptTemplate.replace('%%GTM_ID%%', GTM_ID);
+    const finalScript = loaderScriptTemplate
+        .replace(/%%GTM_ID%%/g, GTM_ID)
+        .replace(/%%GTM_SERVER_URL%%/g, GTM_SERVER_URL);
     res.send(finalScript);
 });
 
@@ -118,16 +120,12 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         const currentKey = await ensureKey();
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
 
-        // Correctly parse the decrypted fragment into path and query
         const [decryptedPath, decryptedQuery] = decryptedFragment.split('?');
         
-        const upstreamHost = `${GTM_ID}.fps.goog`;
-        const targetUrl = new URL(`https://${upstreamHost}`);
+        const targetUrl = new URL(GTM_SERVER_URL);
         
-        // Set the pathname, avoiding any double slashes.
-        targetUrl.pathname = decryptedPath;
+        targetUrl.pathname = path.join(targetUrl.pathname, decryptedPath);
 
-        // Add query params from the decrypted fragment
         if (decryptedQuery) {
             const params = new URLSearchParams(decryptedQuery);
             params.forEach((value, key) => {
@@ -135,7 +133,6 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             });
         }
         
-        // Add any query params that were on the proxy URL itself (if any)
         Object.keys(req.query).forEach(key => {
             targetUrl.searchParams.append(key, req.query[key]);
         });
@@ -148,7 +145,7 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             data: req.method !== 'GET' && req.body.length > 0 ? req.body : null,
             headers: {
                 ...req.headers,
-                host: upstreamHost,
+                host: targetUrl.hostname,
             },
             responseType: 'stream',
             validateStatus: () => true, // Let us handle all status codes
@@ -156,8 +153,6 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 
         res.status(response.status);
         Object.keys(response.headers).forEach(key => {
-            // We must preserve the content-encoding header from the upstream response.
-            // We let express handle transfer-encoding and content-length.
             if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-length') {
                 res.setHeader(key, response.headers[key]);
             }
@@ -185,8 +180,6 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}. GTM_ID: ${GTM_ID}.`);
     
-    // Initial key fetch. If it fails, log a warning. The service will keep running
-    // and retry on the next request that requires a key.
     updateEncryptionKey().then(() => {
         if (isKeyValid()) {
             console.log('Initial encryption key fetch successful.');
@@ -195,6 +188,5 @@ app.listen(PORT, () => {
         }
     });
 
-    // Set up periodic key refresh to run in the background.
     setInterval(updateEncryptionKey, 60 * 60 * 1000);
 });
