@@ -119,6 +119,45 @@
                 configurable: true
             });
         }
+
+        if (tagName.toLowerCase() === 'iframe') {
+            const originalSetAttribute = element.setAttribute.bind(element);
+            element.setAttribute = function (name, value) {
+                if (name.toLowerCase() === 'src' && typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+                    console.log('GTM Proxy: Intercepting iframe src:', value);
+                    modifyUrl(value).then(modifiedUrl => {
+                        originalSetAttribute(name, modifiedUrl);
+                    }).catch(error => {
+                        console.error('GTM Proxy: Error modifying iframe URL:', error);
+                        originalSetAttribute(name, value);
+                    });
+                    return;
+                } else {
+                    originalSetAttribute(name, value);
+                }
+            };
+
+            Object.defineProperty(element, 'src', {
+                get: function () {
+                    return this.getAttribute('src');
+                },
+                set: function (value) {
+                    if (typeof value === 'string' && value.includes(GTM_SERVER_URL)) {
+                        console.log('GTM Proxy: Intercepting iframe src property:', value);
+                        modifyUrl(value).then(modifiedUrl => {
+                            this.setAttribute('src', modifiedUrl);
+                        }).catch(error => {
+                            console.error('GTM Proxy: Error modifying iframe src property:', error);
+                            this.setAttribute('src', value);
+                        });
+                    } else {
+                        this.setAttribute('src', value);
+                    }
+                },
+                configurable: true
+            });
+        }
+
         return element;
     };
 
@@ -204,6 +243,25 @@
     };
 
     console.log('GTM Proxy: Immediate interception setup complete.');
+
+    // Override Service Worker registration to intercept worker scripts
+    if ('serviceWorker' in navigator) {
+        const originalRegister = navigator.serviceWorker.register;
+        navigator.serviceWorker.register = function(scriptURL, options) {
+            if (typeof scriptURL === 'string' && scriptURL.includes(GTM_SERVER_URL)) {
+                console.log('GTM Proxy: Intercepting Service Worker registration:', scriptURL);
+                return modifyUrl(scriptURL).then(modifiedUrl => {
+                    console.log('GTM Proxy: Service Worker URL modified to:', modifiedUrl);
+                    return originalRegister.call(this, modifiedUrl, options);
+                }).catch(error => {
+                    console.error('GTM Proxy: Error modifying Service Worker URL:', error);
+                    return originalRegister.call(this, scriptURL, options);
+                });
+            }
+            return originalRegister.call(this, scriptURL, options);
+        };
+        console.log('GTM Proxy: Service Worker interception setup complete.');
+    }
 
     (async function initialize() {
         window.dataLayer = window.dataLayer || [];
