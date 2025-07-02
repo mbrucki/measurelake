@@ -13,6 +13,7 @@ const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
 const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
+const USAGE_API_URL = 'https://measurelake-249969218520.us-central1.run.app/updateUsage';
 const PORT = process.env.PORT || 8080;
 
 if (!GTM_ID || !GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
@@ -106,6 +107,35 @@ async function ensureKey() {
         throw new Error('Encryption key is not available.');
     }
     return encryptionKey;
+}
+
+// --- Usage Tracking ---
+async function trackUsage(usageCount = 1) {
+    try {
+        const referer = new URL(GTM_SERVER_URL).origin;
+        console.log(`Tracking usage: ${usageCount} for domain: ${referer}`);
+        
+        await axios.post(USAGE_API_URL, 
+            { usage: usageCount }, 
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Origin': referer,
+                    'Referer': referer,
+                    'Authorization': `Bearer ${MEASURELAKE_API_KEY}`
+                },
+                timeout: 5000 // 5 second timeout to avoid blocking main response
+            }
+        );
+        
+        console.log(`Successfully tracked ${usageCount} usage(s)`);
+    } catch (error) {
+        // Don't let usage tracking failures affect the main functionality
+        console.warn('Failed to track usage:', error.response ? 
+            `${error.response.status} - ${error.response.statusText}` : 
+            error.message
+        );
+    }
 }
 
 // --- API and Static Endpoints ---
@@ -214,6 +244,12 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             }
         });
         response.data.pipe(res);
+
+        // Track usage after successful response (non-blocking)
+        // Only track for successful responses (2xx status codes)
+        if (response.status >= 200 && response.status < 300) {
+            setImmediate(() => trackUsage(1));
+        }
 
     } catch (error) {
         console.error('Proxy error:', error.message);
