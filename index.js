@@ -292,7 +292,11 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             }
         }
 
-        const [decryptedPath, decryptedQuery] = decryptedFragment.split('?');
+        // URL decode the decrypted fragment to handle spaces and special characters
+        const decodedFragment = decodeURIComponent(decryptedFragment);
+        console.log(`GTM Proxy: Decoded fragment: ${decodedFragment}`);
+        
+        const [decryptedPath, decryptedQuery] = decodedFragment.split('?');
         
         const targetUrl = new URL(GTM_SERVER_URL);
         
