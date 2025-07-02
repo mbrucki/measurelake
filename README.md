@@ -16,6 +16,7 @@ Before you begin, you'll need:
 - A Google Tag Manager account with a container ID
 - A GTM Server-Side Container already deployed
 - Access to Google Cloud Platform (or another container hosting service)
+- Identity and Access Management (IAM) API enabled
 - Basic website editing permissions
 - MeasureLake API key (contact welcome@measurelake.com to get access during pilot phase)
 
@@ -91,7 +92,7 @@ Your analytics should continue working with all of them.
 
 ## Support
 
-For technical support or questions about implementation, please contact our team.
+For technical support or questions about implementation, please us at welcome@measurelake.com
 
 ---
 

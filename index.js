@@ -27,20 +27,45 @@ let keyExpiry = null;
 
 // --- Cryptography Helpers ---
 function decrypt(encryptedString, key) {
+    console.log(`=== Decrypt Debug ===`);
+    console.log(`Input encrypted string length: ${encryptedString.length}`);
+    console.log(`Input key length: ${key ? key.length : 'null'}`);
+    console.log(`Encrypted string (first 50 chars): ${encryptedString.substring(0, 50)}...`);
+    
+    if (key) {
+        console.log(`Decrypt key value: "${key}"`);
+        console.log(`Decrypt key first 10 chars: "${key.substring(0, 10)}"`);
+        console.log(`Decrypt key last 10 chars: "${key.substring(key.length - 10)}"`);
+    }
+    
     try {
         const parts = encryptedString.split(':');
-        if (parts.length !== 2) throw new Error('Invalid encrypted string format.');
+        console.log(`Split parts count: ${parts.length}`);
+        if (parts.length !== 2) {
+            console.error(`Invalid format: expected 2 parts, got ${parts.length}`);
+            throw new Error('Invalid encrypted string format.');
+        }
+        
+        console.log(`IV part length: ${parts[0].length}`);
+        console.log(`Encrypted data part length: ${parts[1].length}`);
         
         const iv = Buffer.from(parts[0], 'hex');
         const encryptedData = Buffer.from(parts[1], 'hex');
+        
+        console.log(`IV buffer length: ${iv.length}`);
+        console.log(`Encrypted data buffer length: ${encryptedData.length}`);
         
         // Web Crypto API includes the auth tag in the encrypted result
         // The last 16 bytes are the auth tag
         const tag = encryptedData.slice(-16);
         const ciphertext = encryptedData.slice(0, -16);
         
+        console.log(`Auth tag length: ${tag.length}`);
+        console.log(`Ciphertext length: ${ciphertext.length}`);
+        
         // Create key with proper length - Web Crypto uses the key as-is
         const keyBuffer = Buffer.from(key, 'utf8');
+        console.log(`Key buffer length: ${keyBuffer.length}`);
         
         // Determine AES variant based on key length to match client side
         let algorithm;
@@ -51,44 +76,70 @@ function decrypt(encryptedString, key) {
         } else if (keyBuffer.length === 32) {
             algorithm = 'aes-256-gcm';
         } else {
+            console.error(`Invalid key length: ${keyBuffer.length} bytes`);
             throw new Error(`Invalid key length: ${keyBuffer.length} bytes. Expected 16, 24, or 32 bytes.`);
         }
+        
+        console.log(`Using algorithm: ${algorithm}`);
         
         const decipher = crypto.createDecipheriv(algorithm, keyBuffer, iv);
         decipher.setAuthTag(tag);
         
         let decrypted = decipher.update(ciphertext, null, 'utf-8');
         decrypted += decipher.final('utf-8');
+        
+        console.log(`Successfully decrypted. Result length: ${decrypted.length}`);
         return decrypted;
     } catch (error) {
-        console.error('Decryption failed:', error.message);
+        console.error('=== Decryption Error Details ===');
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
         console.error('Key length:', Buffer.from(key, 'utf8').length);
-        console.error('IV length:', Buffer.from(parts[0], 'hex').length);
-        console.error('Encrypted data length:', Buffer.from(parts[1], 'hex').length);
+        if (encryptedString.includes(':')) {
+            const parts = encryptedString.split(':');
+            console.error('IV length:', Buffer.from(parts[0], 'hex').length);
+            console.error('Encrypted data length:', Buffer.from(parts[1], 'hex').length);
+        }
         throw new Error('Decryption failed');
     }
 }
 
 // --- Key Management ---
 async function updateEncryptionKey() {
+    console.log('=== Update Encryption Key Debug ===');
     console.log('Attempting to fetch new encryption key...');
     try {
         const referer = new URL(GTM_SERVER_URL).origin;
         console.log(`Fetching key with Referer: ${referer}`);
+        console.log(`API URL: ${KEY_API_URL}`);
+        console.log(`API Key length: ${MEASURELAKE_API_KEY ? MEASURELAKE_API_KEY.length : 'missing'}`);
+        
         const response = await axios.get(KEY_API_URL, {
             headers: { 
                 'Referer': referer,
                 'Authorization': `Bearer ${MEASURELAKE_API_KEY}`
             }
         });
+        
+        console.log(`API Response Status: ${response.status}`);
+        console.log(`API Response Data:`, response.data);
+        
         if (response.data && response.data.key && response.data.key_expiry) {
             encryptionKey = response.data.key;
             keyExpiry = new Date(response.data.key_expiry);
-            console.log(`Successfully updated encryption key. New expiry: ${keyExpiry.toISOString()}`);
+            console.log(`Successfully updated encryption key. Key length: ${encryptionKey.length}, New expiry: ${keyExpiry.toISOString()}`);
         } else {
+            console.error('Invalid response structure from key API:', response.data);
             throw new Error('Invalid response structure from key API.');
         }
     } catch (error) {
+        console.error('=== Key Fetch Error ===');
+        console.error('Error message:', error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+            console.error('Response headers:', error.response.headers);
+        }
         console.error('Failed to fetch encryption key:', error.response ? error.response.status : error.message);
         encryptionKey = null;
         keyExpiry = null;
@@ -100,12 +151,26 @@ function isKeyValid() {
 }
 
 async function ensureKey() {
+    console.log(`=== Ensure Key Debug ===`);
+    console.log(`Current key valid: ${isKeyValid()}`);
+    console.log(`Current key exists: ${!!encryptionKey}`);
+    console.log(`Current key expiry: ${keyExpiry ? keyExpiry.toISOString() : 'none'}`);
+    
+    if (encryptionKey) {
+        console.log(`Current key value: "${encryptionKey}"`);
+        console.log(`Current key first 10 chars: "${encryptionKey.substring(0, 10)}"`);
+        console.log(`Current key last 10 chars: "${encryptionKey.substring(encryptionKey.length - 10)}"`);
+    }
+    
     if (!isKeyValid()) {
+        console.log(`Key invalid, fetching new key...`);
         await updateEncryptionKey();
     }
     if (!encryptionKey) {
+        console.error(`No encryption key available after ensure attempt`);
         throw new Error('Encryption key is not available.');
     }
+    console.log(`Returning key with length: ${encryptionKey.length}`);
     return encryptionKey;
 }
 
@@ -168,10 +233,16 @@ app.get('/', (req, res) => {
 
 // Serve the encryption key
 app.get('/api/get-key', cors(), async (req, res) => {
+    console.log(`=== API Get Key Debug ===`);
     try {
         await ensureKey();
+        console.log(`Sending key to client - Length: ${encryptionKey.length}`);
+        console.log(`Key first 10 chars: "${encryptionKey.substring(0, 10)}"`);
+        console.log(`Key last 10 chars: "${encryptionKey.substring(encryptionKey.length - 10)}"`);
+        console.log(`Key expiry: ${keyExpiry.toISOString()}`);
         res.json({ key: encryptionKey, expiry: keyExpiry.toISOString() });
     } catch (error) {
+        console.error(`Failed to get key for client:`, error.message);
         res.status(503).json({ error: 'Key not available' });
     }
 });
@@ -182,13 +253,28 @@ app.use(express.raw({type: 'text/plain'}));
 app.all('/load/:encryptedFragment', async (req, res) => {
     const { encryptedFragment } = req.params;
 
+    console.log(`=== GTM Proxy Request Debug ===`);
+    console.log(`Method: ${req.method}`);
+    console.log(`Encrypted Fragment (first 50 chars): ${encryptedFragment.substring(0, 50)}...`);
+    console.log(`Fragment Length: ${encryptedFragment.length}`);
+    console.log(`Referer: ${req.headers.referer || 'none'}`);
+
     try {
+        console.log(`Ensuring encryption key...`);
         const currentKey = await ensureKey();
+        console.log(`Key available: ${!!currentKey}, Key length: ${currentKey ? currentKey.length : 'N/A'}`);
+        
+        if (currentKey) {
+            console.log(`Proxy using key: "${currentKey}"`);
+            console.log(`Proxy key first 10 chars: "${currentKey.substring(0, 10)}"`);
+            console.log(`Proxy key last 10 chars: "${currentKey.substring(currentKey.length - 10)}"`);
+        }
         
         // Add logging to debug encoding issues
         console.log(`GTM Proxy: Received encrypted fragment: ${encryptedFragment.substring(0, 50)}...`);
         console.log(`GTM Proxy: Fragment length: ${encryptedFragment.length}`);
         
+        console.log(`Attempting to decrypt fragment...`);
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
         console.log(`GTM Proxy: Decrypted fragment: ${decryptedFragment}`);
 
