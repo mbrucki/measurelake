@@ -13,7 +13,7 @@ const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
 const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
-const USAGE_API_URL = 'https://measurelake-249969218520.us-central1.run.app/updateUsage';
+const USAGE_API_URL = 'https://measurelake-usage-249969218520.us-central1.run.app/updateUsage';
 const PORT = process.env.PORT || 8080;
 
 if (!GTM_ID || !GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
