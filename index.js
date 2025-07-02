@@ -292,26 +292,34 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             }
         }
 
-        // URL decode the decrypted fragment to handle spaces and special characters
-        const decodedFragment = decodeURIComponent(decryptedFragment);
-        console.log(`GTM Proxy: Decoded fragment: ${decodedFragment}`);
-        
-        const [decryptedPath, decryptedQuery] = decodedFragment.split('?');
+        // Use the decrypted fragment directly (it should already be properly URL-encoded)
+        const [decryptedPath, decryptedQuery] = decryptedFragment.split('?');
         
         const targetUrl = new URL(GTM_SERVER_URL);
         
         targetUrl.pathname = path.join(targetUrl.pathname, decryptedPath);
 
+        // Build query string manually to preserve proper encoding
+        let finalQueryString = '';
+        
         if (decryptedQuery) {
-            const params = new URLSearchParams(decryptedQuery);
-            params.forEach((value, key) => {
-                targetUrl.searchParams.append(key, value);
-            });
+            finalQueryString = decryptedQuery;
         }
         
-        Object.keys(req.query).forEach(key => {
-            targetUrl.searchParams.append(key, req.query[key]);
-        });
+        // Add any additional query parameters from the original request
+        if (Object.keys(req.query).length > 0) {
+            const additionalParams = new URLSearchParams(req.query).toString();
+            if (finalQueryString) {
+                finalQueryString += '&' + additionalParams;
+            } else {
+                finalQueryString = additionalParams;
+            }
+        }
+        
+        // Set the search manually to preserve encoding
+        if (finalQueryString) {
+            targetUrl.search = '?' + finalQueryString;
+        }
         
         console.log(`Forwarding request to: ${targetUrl.toString()}`);
 
