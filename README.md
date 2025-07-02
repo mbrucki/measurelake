@@ -17,6 +17,7 @@ Before you begin, you'll need:
 - A GTM Server-Side Container already deployed
 - Access to Google Cloud Platform (or another container hosting service)
 - Basic website editing permissions
+- MeasureLake API key (contact welcome@measurelake.com to get access during pilot phase)
 
 ## Implementation Guide
 
@@ -36,17 +37,25 @@ Before you begin, you'll need:
 5. **Deploy the service**
 6. **Note your service URL** (e.g., `https://your-service-abc123.run.app`)
 
-### Step 2: Update Your Website
+### Step 2: Set Up Custom Domain
+
+1. **Choose a subdomain name**: Select a subdomain that won't trigger ad blockers. Avoid using obvious terms like 'gtm', 'analytics', or 'tracking'. Instead, use neutral terms like 'loading', 'assets', or 'static'
+2. **Configure Load Balancer** in your cloud provider
+3. **Set up DNS records** for your custom domain
+4. **Map the domain** to your service
+5. **Verify SSL/TLS** certificates are properly configured
+
+### Step 3: Update Your Website
 
 **Remove your existing GTM snippet** and replace it with:
 
 ```html
-<script src="https://your-service-abc123.run.app/"></script>
+<script src="https://loading.yourdomain.com/"></script>
 ```
 
-That's it! Replace `your-service-abc123.run.app` with your actual service URL from Step 1.
+That's it! Replace `loading.yourdomain.com` with your actual custom domain configured in Step 2.
 
-### Step 3: Test Your Implementation
+### Step 4: Test Your Implementation
 
 1. **Open your website** in a browser with ad-blocker enabled
 2. **Open Developer Tools** (F12) → Network tab
@@ -54,7 +63,7 @@ That's it! Replace `your-service-abc123.run.app` with your actual service URL fr
 4. **Verify**: You should see requests going to your service domain instead of Google's domains
 5. **Check Analytics**: Confirm events are appearing in your GA4/GTM debug console
 
-### Step 4: Verify Ad-Blocker Bypass
+### Step 5: Verify Ad-Blocker Bypass
 
 Test with popular ad-blockers:
 - **Brave Browser**: Enable "Aggressive" blocking

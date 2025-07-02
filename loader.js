@@ -34,15 +34,22 @@
             encryptionKey = await getEncryptionKey();
             if (!encryptionKey) throw new Error("Encryption key not available.");
         }
+        console.log('GTM Proxy: Encrypting URL data:', dataString);
+        console.log('GTM Proxy: Key length:', encryptionKey.length);
+        
         const encoder = new TextEncoder();
         const data = encoder.encode(dataString);
         const keyBytes = encoder.encode(encryptionKey);
+        console.log('GTM Proxy: Key bytes length:', keyBytes.length);
+        
         const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, data);
         const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
         const encryptedHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
-        return `${ivHex}:${encryptedHex}`;
+        const result = `${ivHex}:${encryptedHex}`;
+        console.log('GTM Proxy: Encrypted result length:', result.length);
+        return result;
     }
 
     async function encryptPayload(payloadString) {
@@ -50,6 +57,8 @@
             encryptionKey = await getEncryptionKey();
             if (!encryptionKey) throw new Error("Encryption key not available.");
         }
+        console.log('GTM Proxy: Encrypting payload, length:', payloadString.length);
+        
         const encoder = new TextEncoder();
         const data = encoder.encode(payloadString);
         const keyBytes = encoder.encode(encryptionKey);
@@ -58,7 +67,9 @@
         const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, cryptoKey, data);
         const ivHex = Array.from(iv).map(b => b.toString(16).padStart(2, '0')).join('');
         const encryptedHex = Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('');
-        return `${ivHex}:${encryptedHex}`;
+        const result = `${ivHex}:${encryptedHex}`;
+        console.log('GTM Proxy: Encrypted payload result length:', result.length);
+        return result;
     }
 
     async function modifyUrl(url) {

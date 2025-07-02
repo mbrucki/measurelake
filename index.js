@@ -33,18 +33,37 @@ function decrypt(encryptedString, key) {
         const iv = Buffer.from(parts[0], 'hex');
         const encryptedData = Buffer.from(parts[1], 'hex');
         
-        // The last 16 bytes of the encrypted data is the auth tag
+        // Web Crypto API includes the auth tag in the encrypted result
+        // The last 16 bytes are the auth tag
         const tag = encryptedData.slice(-16);
         const ciphertext = encryptedData.slice(0, -16);
         
-        const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(key, 'utf8'), iv);
+        // Create key with proper length - Web Crypto uses the key as-is
+        const keyBuffer = Buffer.from(key, 'utf8');
+        
+        // Determine AES variant based on key length to match client side
+        let algorithm;
+        if (keyBuffer.length === 16) {
+            algorithm = 'aes-128-gcm';
+        } else if (keyBuffer.length === 24) {
+            algorithm = 'aes-192-gcm';
+        } else if (keyBuffer.length === 32) {
+            algorithm = 'aes-256-gcm';
+        } else {
+            throw new Error(`Invalid key length: ${keyBuffer.length} bytes. Expected 16, 24, or 32 bytes.`);
+        }
+        
+        const decipher = crypto.createDecipheriv(algorithm, keyBuffer, iv);
         decipher.setAuthTag(tag);
         
-        let decrypted = decipher.update(ciphertext, 'binary', 'utf-8');
+        let decrypted = decipher.update(ciphertext, null, 'utf-8');
         decrypted += decipher.final('utf-8');
         return decrypted;
     } catch (error) {
         console.error('Decryption failed:', error.message);
+        console.error('Key length:', Buffer.from(key, 'utf8').length);
+        console.error('IV length:', Buffer.from(parts[0], 'hex').length);
+        console.error('Encrypted data length:', Buffer.from(parts[1], 'hex').length);
         throw new Error('Decryption failed');
     }
 }
@@ -135,7 +154,13 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 
     try {
         const currentKey = await ensureKey();
+        
+        // Add logging to debug encoding issues
+        console.log(`GTM Proxy: Received encrypted fragment: ${encryptedFragment.substring(0, 50)}...`);
+        console.log(`GTM Proxy: Fragment length: ${encryptedFragment.length}`);
+        
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
+        console.log(`GTM Proxy: Decrypted fragment: ${decryptedFragment}`);
 
         // Handle encrypted body for POST/PUT requests
         let requestBody = req.body;
