@@ -97,3 +97,7 @@ For technical support or questions about implementation, please us at welcome@me
 ---
 
 **Important**: This service is designed to ensure compliance with privacy regulations while maintaining analytics functionality. Always ensure your data collection practices comply with applicable privacy laws. 
+
+
+____
+You may not sell or provide to third-parties for a fee any version of the software.
