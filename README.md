@@ -100,4 +100,4 @@ For technical support or questions about implementation, please us at welcome@me
 
 
 ____
-You may not sell or provide to third-parties for a fee any version of the software.
+© 2025 Mariusz Brucki MeasureLake. Licensed under CC BY-NC 4.0 (see LICENSE file).
