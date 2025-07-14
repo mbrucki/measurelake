@@ -34,13 +34,22 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", GTM_SERVER_URL],
-            connectSrc: ["'self'", GTM_SERVER_URL],
-            imgSrc: ["'self'", GTM_SERVER_URL, 'data:', 'https:'],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            frameSrc: ["'self'", GTM_SERVER_URL]
+            scriptSrc: ["'self'", "'unsafe-inline'", GTM_SERVER_URL, "https:", "http:"],
+            connectSrc: ["'self'", GTM_SERVER_URL, "https:", "http:"],
+            imgSrc: ["'self'", GTM_SERVER_URL, 'data:', 'https:', 'http:'],
+            styleSrc: ["'self'", "'unsafe-inline'", "https:", "http:"],
+            frameSrc: ["'self'", GTM_SERVER_URL, "https:", "http:"],
+            fontSrc: ["'self'", "https:", "http:", "data:"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["https:", "http:"],
+            upgradeInsecureRequests: []
         }
-    }
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // Rate limiting
