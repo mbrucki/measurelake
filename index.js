@@ -404,6 +404,55 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             res.status(500).send('Internal server error.');
         }
     }
+}); // end of /load/:encryptedFragment handler
+
+// ------------------------------------------------------------------
+// Preview & Diagnostic Pass-Through (for Tag Assistant / GTM Preview)
+// ------------------------------------------------------------------
+app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async (req, res, next) => {
+    // Only allow if this is a GTM preview / debug session
+    const { gtm_preview, gtm_auth } = req.query;
+    if (!gtm_preview || !gtm_auth) {
+        return next(); // Not a preview call – let Express fall through (404)
+    }
+
+    if (DEBUG) debugLog(`[PreviewPass] Forwarding ${req.method} ${req.originalUrl}`);
+
+    try {
+        // Build absolute target URL preserving path & query exactly as received
+        const targetUrl = new URL(req.originalUrl, GTM_SERVER_URL);
+
+        const clientIp = getClientIp(req);
+        const hdrs = { ...req.headers, host: targetUrl.hostname };
+        if (clientIp) {
+            hdrs['x-real-ip'] = hdrs['x-real-ip'] || clientIp;
+            if (hdrs['x-forwarded-for']) {
+                hdrs['x-forwarded-for'] = `${hdrs['x-forwarded-for']}, ${clientIp}`;
+            } else {
+                hdrs['x-forwarded-for'] = clientIp;
+            }
+        }
+
+        const upstream = await axios({
+            method: req.method,
+            url: targetUrl.toString(),
+            data: ['GET', 'HEAD'].includes(req.method) ? undefined : req.body,
+            headers: hdrs,
+            responseType: 'stream',
+            validateStatus: () => true,
+        });
+
+        res.status(upstream.status);
+        Object.entries(upstream.headers).forEach(([key, value]) => {
+            if (!['transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+                res.setHeader(key, value);
+            }
+        });
+        upstream.data.pipe(res);
+    } catch (err) {
+        console.error('Preview pass-through error:', err.message);
+        res.status(502).send('Preview proxy error');
+    }
 });
 
 // --- Server Initialization ---
