@@ -404,7 +404,12 @@ app.all('/load/:encryptedFragment', async (req, res) => {
                     }
                     return c;
                 });
-                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for root .${rootDomain}`);
+                rewritten.forEach((rw, idx) => {
+                    const orig = cookies[idx];
+                    const domainMatch = rw.match(/domain=([^;]+)/i);
+                    const domain = domainMatch ? domainMatch[1] : '(none)';
+                    debugLog(`[CookieRewrite] [${idx}] domain=${domain} | orig: ${orig} | rewritten: ${rw}`);
+                });
                 res.setHeader('set-cookie', rewritten);
                 return;
             }
