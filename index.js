@@ -12,6 +12,8 @@ const app = express();
 const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
 const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
+// Comma-separated list of query-param names that receiving systems use for client IP (e.g. "uip,ip,client_ip")
+const IP_PARAM_KEYS = process.env.IP_PARAM_KEYS ? process.env.IP_PARAM_KEYS.split(',').map(k => k.trim()).filter(Boolean) : ['uip', 'ip'];
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const USAGE_API_URL = 'https://measurelake-usage-249969218520.us-central1.run.app/updateUsage';
 const PORT = process.env.PORT || 8080;
@@ -305,13 +307,38 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         
         targetUrl.pathname = path.join(targetUrl.pathname, decryptedPath);
 
+        // Capture client IP as early as possible
+        const forwardedForHeader = req.headers['x-forwarded-for'];
+        const clientIp = forwardedForHeader ? forwardedForHeader.split(',')[0].trim() : (req.ip || req.connection?.remoteAddress || '');
+        console.log(`Client IP resolved for forwarding: ${clientIp}`);
+
         // Build query string manually to preserve proper encoding
         let finalQueryString = '';
         
         if (decryptedQuery) {
             finalQueryString = decryptedQuery;
         }
-        
+
+        // Append client IP so GTM/GA sees the real user address (supports multiple param keys)
+        if (clientIp) {
+            let ipInserted = false;
+            for (const key of IP_PARAM_KEYS) {
+                if (!finalQueryString.includes(`${key}=`)) {
+                    const encodedPair = `${encodeURIComponent(key)}=${encodeURIComponent(clientIp)}`;
+                    if (finalQueryString) {
+                        finalQueryString += `&${encodedPair}`;
+                    } else {
+                        finalQueryString = encodedPair;
+                    }
+                    ipInserted = true;
+                    break; // insert only once using first suitable key
+                }
+            }
+            if (!ipInserted) {
+                console.log('IP param already present in query – skipping automatic insertion.');
+            }
+        }
+
         // Add any additional query parameters from the original request
         if (Object.keys(req.query).length > 0) {
             const additionalParams = new URLSearchParams(req.query).toString();
@@ -333,10 +360,18 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             method: req.method,
             url: targetUrl.toString(),
             data: (req.method !== 'GET' && req.method !== 'HEAD' && requestBody) ? requestBody : null,
-            headers: {
-                ...req.headers,
-                host: targetUrl.hostname,
-            },
+            headers: (() => {
+                const hdrs = { ...req.headers, host: targetUrl.hostname };
+                // Ensure client IP is present in X-Forwarded-For chain
+                if (clientIp) {
+                    if (hdrs['x-forwarded-for']) {
+                        hdrs['x-forwarded-for'] = `${hdrs['x-forwarded-for']}, ${clientIp}`;
+                    } else {
+                        hdrs['x-forwarded-for'] = clientIp;
+                    }
+                }
+                return hdrs;
+            })(),
             responseType: 'stream',
             validateStatus: () => true, // Let us handle all status codes
         });
