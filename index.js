@@ -449,7 +449,11 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
         if (clientIp) {
             hdrs['x-real-ip'] = hdrs['x-real-ip'] || clientIp;
             if (hdrs['x-forwarded-for']) {
-                hdrs['x-forwarded-for'] = `${hdrs['x-forwarded-for']}, ${clientIp}`;
+                // Only append if not already present as last value
+                const parts = hdrs['x-forwarded-for'].split(',').map(s => s.trim());
+                if (parts[parts.length - 1] !== clientIp) {
+                    hdrs['x-forwarded-for'] = `${hdrs['x-forwarded-for']}, ${clientIp}`;
+                }
             } else {
                 hdrs['x-forwarded-for'] = clientIp;
             }
