@@ -317,28 +317,19 @@
             const gtmScript = document.createElement('script');
             gtmScript.async = true;
 
-            // --- START FIX: Preserve GTM debug parameters ---
-            const gtmUrl = new URL(`gtm.js?id=${GTM_ID}`, GTM_SERVER_URL);
+            // Create base GTM URL
+            const gtmUrl = new URL(`${GTM_SERVER_URL}gtm.js`);
+            gtmUrl.searchParams.set('id', GTM_ID);
+
+            // Preserve GTM preview parameters if present
             const pageParams = new URLSearchParams(window.location.search);
-            const debugParams = new URLSearchParams();
+            const previewParams = ['gtm_preview', 'gtm_auth', 'gtm_debug'];
             
-            if (pageParams.has('gtm_preview')) {
-                debugParams.set('gtm_preview', pageParams.get('gtm_preview'));
-                // Also carry over gtm_auth and gtm_debug if preview is on
-                if (pageParams.has('gtm_auth')) {
-                    debugParams.set('gtm_auth', pageParams.get('gtm_auth'));
+            previewParams.forEach(param => {
+                if (pageParams.has(param)) {
+                    gtmUrl.searchParams.set(param, pageParams.get(param));
                 }
-                if (pageParams.has('gtm_debug')) {
-                    debugParams.set('gtm_debug', pageParams.get('gtm_debug'));
-                }
-            }
-            
-            const debugString = debugParams.toString();
-            if (debugString) {
-                // Append the debug params to the existing search params of the gtm.js URL
-                gtmUrl.search += (gtmUrl.search ? '&' : '') + debugString;
-            }
-            // --- END FIX ---
+            });
             
             gtmScript.src = gtmUrl.href;
             document.head.appendChild(gtmScript);
