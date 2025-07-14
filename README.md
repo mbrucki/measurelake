@@ -141,7 +141,7 @@ Your analytics should continue working with all of them.
 
 ## Support
 
-For technical support or questions about implementation, please us at welcome@measurelake.com
+For technical support or questions about implementation, please reach out to us at welcome@measurelake.com
 
 ---
 
