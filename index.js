@@ -379,7 +379,16 @@ app.all('/load/:encryptedFragment', async (req, res) => {
 
         res.status(response.status);
         Object.keys(response.headers).forEach(key => {
-            if (key.toLowerCase() !== 'transfer-encoding' && key.toLowerCase() !== 'content-length') {
+            const lower = key.toLowerCase();
+            if (lower === 'set-cookie') {
+                const host = req.headers.host;
+                const cookies = Array.isArray(response.headers[key]) ? response.headers[key] : [response.headers[key]];
+                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=${host}`));
+                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for host ${host}`);
+                res.setHeader('set-cookie', rewritten);
+                return;
+            }
+            if (!['transfer-encoding', 'content-length'].includes(lower)) {
                 res.setHeader(key, response.headers[key]);
             }
         });
