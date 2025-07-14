@@ -247,7 +247,12 @@ app.get('/api/get-key', cors(), async (req, res) => {
     }
 });
 
-app.use(express.raw({type: 'text/plain'}));
+// Accept raw bodies for **all** content types so we don’t lose multipart, json, etc.
+// The limit is kept reasonable to avoid abuse but should comfortably fit GTM payloads.
+app.use(express.raw({
+    type: () => true,      // parse every incoming request as raw Buffer
+    limit: '10mb'          // adjust if you expect larger uploads
+}));
 
 // --- Main Proxy Endpoint ---
 app.all('/load/:encryptedFragment', async (req, res) => {
@@ -278,17 +283,18 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         const decryptedFragment = decrypt(encryptedFragment, currentKey);
         console.log(`GTM Proxy: Decrypted fragment: ${decryptedFragment}`);
 
-        // Handle encrypted body for POST/PUT requests
+        // Attempt body decryption for **any** request that includes a payload.
+        // If decryption fails we simply forward the original bytes – this keeps 1-1 parity.
         let requestBody = req.body;
-        if ((req.method === 'POST' || req.method === 'PUT') && req.body && req.body.length > 0) {
-            console.log('GTM Proxy: Decrypting request body...');
+        if (req.body && req.body.length > 0) {
+            console.log('GTM Proxy: Attempting to decrypt request body (length:', req.body.length, ') ...');
             try {
                 const bodyAsString = req.body.toString('utf-8');
                 requestBody = decrypt(bodyAsString, currentKey);
-            } catch(e) {
-                console.error('GTM Proxy: Failed to decrypt request body.', e.message);
-                // Decide if you want to forward with undecrypted body or return an error
-                return res.status(400).send('Bad Request: Body decryption failed.');
+                console.log('GTM Proxy: Body decrypted successfully – new length:', requestBody.length);
+            } catch (e) {
+                console.warn('GTM Proxy: Body not encrypted or decryption failed – forwarding as-is. Reason:', e.message);
+                requestBody = req.body; // forward the original Buffer
             }
         }
 

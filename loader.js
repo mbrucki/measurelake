@@ -223,7 +223,14 @@
             finalResource = await modifyUrl(resource);
             console.log('GTM Proxy: Fetch URL modified to:', finalResource);
 
-            if (finalInit.body && (String(finalInit.method).toUpperCase() === 'POST' || String(finalInit.method).toUpperCase() === 'PUT')) {
+            // Ensure cookies / auth headers are always included
+            if (finalInit.credentials === undefined) {
+                finalInit.credentials = 'include';
+            }
+
+            // Encrypt body for write-methods to preserve parity with server logic
+            const method = (finalInit.method || 'GET').toUpperCase();
+            if (finalInit.body && ['POST', 'PUT', 'PATCH'].includes(method)) {
                  if (typeof finalInit.body === 'string') {
                     console.log('GTM Proxy: Encrypting fetch payload.');
                     finalInit.body = await encryptPayload(finalInit.body);
@@ -238,19 +245,42 @@
     // Override XMLHttpRequest IMMEDIATELY
     const originalXHROpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        // Remember method so we know later if body should be encrypted
+        this._ml_method = method ? String(method).toUpperCase() : 'GET';
+
         if (typeof url === 'string' && url.includes(GTM_SERVER_URL)) {
             console.log('GTM Proxy: Intercepting XHR:', url);
             const xhr = this;
             modifyUrl(url).then(modifiedUrl => {
                 console.log('GTM Proxy: XHR URL modified to:', modifiedUrl);
+                xhr.withCredentials = true; // always send cookies
                 originalXHROpen.call(xhr, method, modifiedUrl, ...args);
             }).catch(error => {
                 console.error('GTM Proxy: Error modifying XHR URL:', error);
+                xhr.withCredentials = true;
                 originalXHROpen.call(xhr, method, url, ...args);
             });
             return;
         }
+        this.withCredentials = true; // still send cookies for same-origin requests
         return originalXHROpen.call(this, method, url, ...args);
+    };
+
+    // Encrypt XHR request body if necessary
+    const originalXHRSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(body) {
+        // Only attempt encryption if body is a plain string and method warrants it
+        if (this._ml_method && ['POST', 'PUT', 'PATCH'].includes(this._ml_method) && typeof body === 'string') {
+            console.log('GTM Proxy: Encrypting XHR payload.');
+            encryptPayload(body).then(encrypted => {
+                originalXHRSend.call(this, encrypted);
+            }).catch(err => {
+                console.error('GTM Proxy: Failed to encrypt XHR payload – sending original. Reason:', err);
+                originalXHRSend.call(this, body);
+            });
+            return;
+        }
+        return originalXHRSend.call(this, body);
     };
 
     console.log('GTM Proxy: Immediate interception setup complete.');
