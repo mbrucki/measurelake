@@ -384,7 +384,19 @@ app.all('/load/:encryptedFragment', async (req, res) => {
                 const host = req.headers.host;
                 const root = getRootDomain(host);
                 const cookies = Array.isArray(response.headers[key]) ? response.headers[key] : [response.headers[key]];
-                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=.${root}`));
+                const rewritten = cookies.map(orig => {
+                    let c = orig;
+                    if (/domain=/i.test(c)) {
+                        c = c.replace(/domain=[^;]+/i, `Domain=.${root}`);
+                    } else {
+                        c += `; Domain=.${root}`;
+                    }
+                    // guarantee universal path to ensure sub-paths receive cookie
+                    if (!/path=/i.test(c)) {
+                        c += '; Path=/';
+                    }
+                    return c;
+                });
                 debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for root .${root}`);
                 res.setHeader('set-cookie', rewritten);
                 return;
@@ -460,7 +472,19 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
                 const host = req.headers.host;
                 const root = getRootDomain(host);
                 const cookies = Array.isArray(value) ? value : [value];
-                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=.${root}`));
+                const rewritten = cookies.map(orig => {
+                    let c = orig;
+                    if (/domain=/i.test(c)) {
+                        c = c.replace(/domain=[^;]+/i, `Domain=.${root}`);
+                    } else {
+                        c += `; Domain=.${root}`;
+                    }
+                    // guarantee universal path to ensure sub-paths receive cookie
+                    if (!/path=/i.test(c)) {
+                        c += '; Path=/';
+                    }
+                    return c;
+                });
                 res.setHeader('set-cookie', rewritten);
                 return;
             }
