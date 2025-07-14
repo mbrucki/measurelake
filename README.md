@@ -1,6 +1,6 @@
 # GTM Ad-Blocker Bypass Service
 
-A professional solution to ensure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
+Make sure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
 
 ## What This Service Does
 
@@ -62,6 +62,40 @@ The script automatically:
 - Switches to direct server-side container access for debug/preview mode with all parameters
 - Maintains all GTM functionality including preview mode
 
+### Step 3: Configure Debug Options
+
+#### Server-side Debugging
+Debug mode is disabled by default for security. To enable it, set the `DEBUG` environment variable when deploying the service:
+```bash
+# Enable debug mode
+DEBUG=true # or DEBUG=1
+
+# Default (debug disabled)
+DEBUG=false # or leave unset
+```
+
+This will enable detailed logging on the server side. Keep debug mode disabled in production environments.
+
+#### Client-side Debugging
+For additional client-side debugging (beyond GTM preview mode), you can enable console logging by adding the measurelake_debug parameter to your website's URL. 
+
+To enable debug mode, add `measurelake_debug=true` to your website's URL:
+```
+# Normal mode
+https://your-website.com/
+
+# Debug mode
+https://your-website.com/?measurelake_debug=true
+```
+
+When measurelake_debug mode is enabled, you'll see detailed logs in the browser console about:
+- Request interception and modification
+- Encryption/decryption operations
+- GTM initialization and configuration
+- Error details and troubleshooting information
+
+Note: This debug mode is separate from GTM's preview mode (`gtm_debug` parameter) and can be used independently.
+
 ### Step 3: Set Up Custom Domain
 
 1. **Choose a subdomain name**: Select a subdomain that won't trigger ad blockers. Avoid using obvious terms like 'gtm', 'analytics', or 'tracking'. Instead, use neutral terms like 'loading', 'assets', or 'static'
@@ -81,9 +115,10 @@ The script automatically:
 ### Step 5: Verify Ad-Blocker Bypass
 
 Test with popular ad-blockers:
-- **Brave Browser**: Enable "Aggressive" blocking
-- **uBlock Origin**: Default settings
-- **AdBlock Plus**: Default settings
+- **Brave Browser**
+- **uBlock Origin**
+- **AdBlock Plus**
+- or any other...
 
 Your analytics should continue working with all of them.
 
