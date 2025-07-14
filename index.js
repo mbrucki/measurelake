@@ -484,27 +484,31 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
         Object.entries(upstream.headers).forEach(([key, value]) => {
             const lower = key.toLowerCase();
             if (lower === 'set-cookie') {
-                // Ensure preview cookies stick to the proxy host instead of upstream domain
+                // Get the actual domain from the request
                 const host = req.headers.host;
-                // Compute eTLD+1 (root domain) from host
-                function getRootDomain(host) {
-                    const parts = host.split('.');
-                    if (parts.length <= 2) return host;
-                    return parts.slice(-2).join('.');
-                }
-                const rootDomain = getRootDomain(host);
+                // Extract domain parts
+                const domainParts = host.split('.');
+                // Get the main domain (last two parts)
+                const mainDomain = domainParts.slice(-2).join('.');
+                
                 const cookies = Array.isArray(value) ? value : [value];
                 const rewritten = cookies.map(orig => {
                     let c = orig;
-                    // Always force domain to .<rootDomain>
+                    // Always force domain to .mainDomain
                     if (/domain=/i.test(c)) {
-                        c = c.replace(/domain=[^;]+/i, `Domain=.${rootDomain}`);
+                        c = c.replace(/domain=[^;]+/i, `Domain=.${mainDomain}`);
                     } else {
-                        c += `; Domain=.${rootDomain}`;
+                        c += `; Domain=.${mainDomain}`;
                     }
-                    // guarantee universal path to ensure sub-paths receive cookie
+                    // Ensure path is root
                     if (!/path=/i.test(c)) {
                         c += '; Path=/';
+                    }
+                    // Log cookie transformation for debugging
+                    if (DEBUG) {
+                        debugLog(`[PreviewCookie] Original: ${orig}`);
+                        debugLog(`[PreviewCookie] Rewritten: ${c}`);
+                        debugLog(`[PreviewCookie] Domain: .${mainDomain}`);
                     }
                     return c;
                 });
