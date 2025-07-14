@@ -14,6 +14,7 @@ const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.t
 const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
 // Comma-separated list of query-param names that receiving systems use for client IP (e.g. "uip,ip,client_ip")
 const IP_PARAM_KEYS = process.env.IP_PARAM_KEYS ? process.env.IP_PARAM_KEYS.split(',').map(k => k.trim()).filter(Boolean) : ['uip', 'ip'];
+const DEBUG = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
 const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
 const USAGE_API_URL = 'https://measurelake-usage-249969218520.us-central1.run.app/updateUsage';
 const PORT = process.env.PORT || 8080;
@@ -308,9 +309,8 @@ app.all('/load/:encryptedFragment', async (req, res) => {
         targetUrl.pathname = path.join(targetUrl.pathname, decryptedPath);
 
         // Capture client IP as early as possible
-        const forwardedForHeader = req.headers['x-forwarded-for'];
-        const clientIp = forwardedForHeader ? forwardedForHeader.split(',')[0].trim() : (req.ip || req.connection?.remoteAddress || '');
-        console.log(`Client IP resolved for forwarding: ${clientIp}`);
+        const clientIp = getClientIp(req);
+        debugLog(`Client IP resolved for forwarding: ${clientIp}`);
 
         // Build query string manually to preserve proper encoding
         let finalQueryString = '';
@@ -335,7 +335,7 @@ app.all('/load/:encryptedFragment', async (req, res) => {
                 }
             }
             if (!ipInserted) {
-                console.log('IP param already present in query – skipping automatic insertion.');
+                debugLog('IP param already present in query – skipping automatic insertion.');
             }
         }
 
@@ -369,6 +369,7 @@ app.all('/load/:encryptedFragment', async (req, res) => {
                     } else {
                         hdrs['x-forwarded-for'] = clientIp;
                     }
+                    hdrs['x-real-ip'] = hdrs['x-real-ip'] || clientIp;
                 }
                 return hdrs;
             })(),
@@ -421,3 +422,29 @@ app.listen(PORT, () => {
 
     setInterval(updateEncryptionKey, 60 * 60 * 1000);
 });
+
+// --- Utility: Conditional Logger ---
+function debugLog(...args) {
+    if (DEBUG) console.log('[DEBUG]', ...args);
+}
+
+// --- Utility: Resolve Client IP (handles various proxy headers) ---
+function getClientIp(req) {
+    const headerSources = [
+        'cf-connecting-ip', // Cloudflare
+        'true-client-ip',   // Akamai / CloudFront
+        'x-real-ip',        // Nginx / generic
+        'x-client-ip',
+        'x-forwarded-for'
+    ];
+    for (const header of headerSources) {
+        const value = req.headers[header];
+        if (value) {
+            // X-Forwarded-For can be a list. Take first element.
+            const ip = header === 'x-forwarded-for' ? value.split(',')[0].trim() : value.trim();
+            if (ip) return ip;
+        }
+    }
+    // Fall back to Express-provided properties
+    return (req.ip || req.connection?.remoteAddress || '').toString();
+}
