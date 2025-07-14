@@ -382,14 +382,21 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             const lower = key.toLowerCase();
             if (lower === 'set-cookie') {
                 const host = req.headers.host;
-                const root = getRootDomain(host);
+                // Compute eTLD+1 (root domain) from host
+                function getRootDomain(host) {
+                    const parts = host.split('.');
+                    if (parts.length <= 2) return host;
+                    return parts.slice(-2).join('.');
+                }
+                const rootDomain = getRootDomain(host);
                 const cookies = Array.isArray(response.headers[key]) ? response.headers[key] : [response.headers[key]];
                 const rewritten = cookies.map(orig => {
                     let c = orig;
+                    // Always force domain to .<rootDomain>
                     if (/domain=/i.test(c)) {
-                        c = c.replace(/domain=[^;]+/i, `Domain=.${root}`);
+                        c = c.replace(/domain=[^;]+/i, `Domain=.${rootDomain}`);
                     } else {
-                        c += `; Domain=.${root}`;
+                        c += `; Domain=.${rootDomain}`;
                     }
                     // guarantee universal path to ensure sub-paths receive cookie
                     if (!/path=/i.test(c)) {
@@ -397,7 +404,7 @@ app.all('/load/:encryptedFragment', async (req, res) => {
                     }
                     return c;
                 });
-                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for root .${root}`);
+                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for root .${rootDomain}`);
                 res.setHeader('set-cookie', rewritten);
                 return;
             }
@@ -474,14 +481,21 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
             if (lower === 'set-cookie') {
                 // Ensure preview cookies stick to the proxy host instead of upstream domain
                 const host = req.headers.host;
-                const root = getRootDomain(host);
+                // Compute eTLD+1 (root domain) from host
+                function getRootDomain(host) {
+                    const parts = host.split('.');
+                    if (parts.length <= 2) return host;
+                    return parts.slice(-2).join('.');
+                }
+                const rootDomain = getRootDomain(host);
                 const cookies = Array.isArray(value) ? value : [value];
                 const rewritten = cookies.map(orig => {
                     let c = orig;
+                    // Always force domain to .<rootDomain>
                     if (/domain=/i.test(c)) {
-                        c = c.replace(/domain=[^;]+/i, `Domain=.${root}`);
+                        c = c.replace(/domain=[^;]+/i, `Domain=.${rootDomain}`);
                     } else {
-                        c += `; Domain=.${root}`;
+                        c += `; Domain=.${rootDomain}`;
                     }
                     // guarantee universal path to ensure sub-paths receive cookie
                     if (!/path=/i.test(c)) {
