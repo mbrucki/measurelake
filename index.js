@@ -444,7 +444,16 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
 
         res.status(upstream.status);
         Object.entries(upstream.headers).forEach(([key, value]) => {
-            if (!['transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+            const lower = key.toLowerCase();
+            if (lower === 'set-cookie') {
+                // Ensure preview cookies stick to the proxy host instead of upstream domain
+                const host = req.headers.host;
+                const cookies = Array.isArray(value) ? value : [value];
+                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=${host}`));
+                res.setHeader('set-cookie', rewritten);
+                return;
+            }
+            if (!['transfer-encoding', 'content-length'].includes(lower)) {
                 res.setHeader(key, value);
             }
         });
