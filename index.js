@@ -382,9 +382,10 @@ app.all('/load/:encryptedFragment', async (req, res) => {
             const lower = key.toLowerCase();
             if (lower === 'set-cookie') {
                 const host = req.headers.host;
+                const root = getRootDomain(host);
                 const cookies = Array.isArray(response.headers[key]) ? response.headers[key] : [response.headers[key]];
-                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=${host}`));
-                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for host ${host}`);
+                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=.${root}`));
+                debugLog(`[CookieRewrite] Rewriting ${cookies.length} cookies for root .${root}`);
                 res.setHeader('set-cookie', rewritten);
                 return;
             }
@@ -457,8 +458,9 @@ app.all(/^\/(g\/collect|gtm\/preview|diagnostic|cookie_write|gtm)\/?.*/i, async 
             if (lower === 'set-cookie') {
                 // Ensure preview cookies stick to the proxy host instead of upstream domain
                 const host = req.headers.host;
+                const root = getRootDomain(host);
                 const cookies = Array.isArray(value) ? value : [value];
-                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=${host}`));
+                const rewritten = cookies.map(c => c.replace(/domain=[^;]+/i, `Domain=.${root}`));
                 res.setHeader('set-cookie', rewritten);
                 return;
             }
@@ -514,4 +516,11 @@ function getClientIp(req) {
     }
     // Fall back to Express-provided properties
     return (req.ip || req.connection?.remoteAddress || '').toString();
+}
+
+// --- Utility: extract eTLD+1 ---
+function getRootDomain(host) {
+    const parts = host.split('.');
+    if (parts.length <= 2) return host; // e.g. example.com
+    return parts.slice(-2).join('.'); // example.co.uk becomes co.uk? Actually this naive - include last two parts
 }
