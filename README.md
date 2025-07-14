@@ -1,6 +1,6 @@
 # GTM Ad-Blocker Bypass Service
 
-A professional solution to ensure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
+Make sure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
 
 ## What This Service Does
 
@@ -38,23 +38,71 @@ Before you begin, you'll need:
 5. **Deploy the service**
 6. **Note your service URL** (e.g., `https://your-service-abc123.run.app`)
 
-### Step 2: Set Up Custom Domain
+### Step 2: Add to Your Website
+
+Add the following script to your website's `<head>` section:
+
+```html
+<script>(function(w,d,s,l,i,p,t,u){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s);j.async=true;t=new URLSearchParams(w.location.search);
+j.src=t.has('gtm_debug')?(u=new URL('gtm.js','https://sgtm.yourdomain.com/'),
+u.searchParams.set('id',i),t.forEach((v,k)=>u.searchParams.set(k,v)),u.href):
+'https://your-proxy-domain.com/';f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-XXXXX');</script>
+```
+
+Replace:
+- `GTM-XXXXX` with your GTM container ID
+- `https://your-proxy-domain.com` with your proxy service URL
+- `https://sgtm.yourdomain.com` with your GTM server-side container URL
+
+The script automatically:
+- Uses the proxy root URL for normal traffic
+- Switches to direct server-side container access for debug/preview mode with all parameters
+- Maintains all GTM functionality including preview mode
+
+### Step 3: Configure Debug Options
+
+#### Server-side Debugging
+Debug mode is disabled by default for security. To enable it, set the `DEBUG` environment variable when deploying the service:
+```bash
+# Enable debug mode
+DEBUG=true # or DEBUG=1
+
+# Default (debug disabled)
+DEBUG=false # or leave unset
+```
+
+This will enable detailed logging on the server side. Keep debug mode disabled in production environments.
+
+#### Client-side Debugging
+For additional client-side debugging (beyond GTM preview mode), you can enable console logging by adding the measurelake_debug parameter to your website's URL. 
+
+To enable debug mode, add `measurelake_debug=true` to your website's URL:
+```
+# Normal mode
+https://your-website.com/
+
+# Debug mode
+https://your-website.com/?measurelake_debug=true
+```
+
+When measurelake_debug mode is enabled, you'll see detailed logs in the browser console about:
+- Request interception and modification
+- Encryption/decryption operations
+- GTM initialization and configuration
+- Error details and troubleshooting information
+
+Note: This debug mode is separate from GTM's preview mode (`gtm_debug` parameter) and can be used independently.
+
+### Step 3: Set Up Custom Domain
 
 1. **Choose a subdomain name**: Select a subdomain that won't trigger ad blockers. Avoid using obvious terms like 'gtm', 'analytics', or 'tracking'. Instead, use neutral terms like 'loading', 'assets', or 'static'
 2. **Configure Load Balancer** in your cloud provider
 3. **Set up DNS records** for your custom domain
 4. **Map the domain** to your service
 5. **Verify SSL/TLS** certificates are properly configured
-
-### Step 3: Update Your Website
-
-**Remove your existing GTM snippet** and replace it with:
-
-```html
-<script src="https://loading.yourdomain.com/"></script>
-```
-
-That's it! Replace `loading.yourdomain.com` with your actual custom domain configured in Step 2.
 
 ### Step 4: Test Your Implementation
 
@@ -67,9 +115,10 @@ That's it! Replace `loading.yourdomain.com` with your actual custom domain confi
 ### Step 5: Verify Ad-Blocker Bypass
 
 Test with popular ad-blockers:
-- **Brave Browser**: Enable "Aggressive" blocking
-- **uBlock Origin**: Default settings
-- **AdBlock Plus**: Default settings
+- **Brave Browser**
+- **uBlock Origin**
+- **AdBlock Plus**
+- or any other...
 
 Your analytics should continue working with all of them.
 
