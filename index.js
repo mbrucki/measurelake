@@ -10,6 +10,25 @@ const helmet = require('helmet');
 
 const app = express();
 
+// --- Configuration ---
+const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
+const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
+const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
+// Comma-separated list of query-param names that receiving systems use for client IP (e.g. "uip,ip,client_ip")
+const IP_PARAM_KEYS = process.env.IP_PARAM_KEYS ? process.env.IP_PARAM_KEYS.split(',').map(k => k.trim()).filter(Boolean) : ['uip', 'ip'];
+const DEBUG = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
+const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
+const USAGE_API_URL = 'https://measurelake-usage-249969218520.us-central1.run.app/updateUsage';
+const PORT = process.env.PORT || 8080;
+
+// --- Utility: Enhanced Debug Logger ---
+const debugLog = {
+    log: (...args) => DEBUG && console.log('[DEBUG]', ...args),
+    error: (...args) => DEBUG && console.error('[DEBUG ERROR]', ...args),
+    warn: (...args) => DEBUG && console.warn('[DEBUG WARN]', ...args),
+    info: (...args) => DEBUG && console.info('[DEBUG INFO]', ...args)
+};
+
 // Security middleware
 app.use(helmet({
     contentSecurityPolicy: {
@@ -32,17 +51,6 @@ const limiter = rateLimit({
 });
 
 app.use('/api/', limiter); // Apply rate limiting to API endpoints
-
-// --- Configuration ---
-const GTM_ID = process.env.GTM_ID ? process.env.GTM_ID.trim() : null;
-const GTM_SERVER_URL = process.env.GTM_SERVER_URL ? process.env.GTM_SERVER_URL.trim() : null;
-const MEASURELAKE_API_KEY = process.env.MEASURELAKE_API_KEY ? process.env.MEASURELAKE_API_KEY.trim() : null;
-// Comma-separated list of query-param names that receiving systems use for client IP (e.g. "uip,ip,client_ip")
-const IP_PARAM_KEYS = process.env.IP_PARAM_KEYS ? process.env.IP_PARAM_KEYS.split(',').map(k => k.trim()).filter(Boolean) : ['uip', 'ip'];
-const DEBUG = process.env.DEBUG === '1' || process.env.DEBUG === 'true';
-const KEY_API_URL = 'https://measurelake-249969218520.us-central1.run.app/givemekey';
-const USAGE_API_URL = 'https://measurelake-usage-249969218520.us-central1.run.app/updateUsage';
-const PORT = process.env.PORT || 8080;
 
 if (!GTM_ID || !GTM_SERVER_URL || !MEASURELAKE_API_KEY) {
     console.error('FATAL: GTM_ID, GTM_SERVER_URL, and MEASURELAKE_API_KEY environment variables must be set.');
@@ -507,14 +515,6 @@ app.listen(PORT, () => {
 
     setInterval(updateEncryptionKey, 60 * 60 * 1000);
 });
-
-// --- Utility: Enhanced Debug Logger ---
-const debugLog = {
-    log: (...args) => DEBUG && console.log('[DEBUG]', ...args),
-    error: (...args) => DEBUG && console.error('[DEBUG ERROR]', ...args),
-    warn: (...args) => DEBUG && console.warn('[DEBUG WARN]', ...args),
-    info: (...args) => DEBUG && console.info('[DEBUG INFO]', ...args)
-};
 
 // --- Utility: Resolve Client IP (handles various proxy headers) ---
 function getClientIp(req) {
