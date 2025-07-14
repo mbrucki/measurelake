@@ -77,12 +77,6 @@
             return url;
         }
 
-        // Check for preview mode flag
-        if (window._gtm_preview_mode === true) {
-            console.log('GTM Proxy: Preview mode - bypassing proxy for URL:', url);
-            return url;
-        }
-
         console.log('GTM Proxy: Intercepting URL:', url);
         const relativePath = url.substring(GTM_SERVER_URL.length);
         const encryptedFragment = await encryptUrl(relativePath);
@@ -318,44 +312,7 @@
         gtag('config', GTM_ID);
         console.log('GTM Proxy: dataLayer initialized for', GTM_ID);
         
-        // Check if we're in preview mode
-        const urlParams = new URLSearchParams(window.location.search);
-        const isPreviewMode = urlParams.has('gtm_preview') && urlParams.has('gtm_auth');
-        
-        if (isPreviewMode) {
-            console.log('GTM Proxy: Preview mode detected, loading directly from GTM server');
-            // Remove any existing GTM script to prevent conflicts
-            const existingGtmScripts = document.querySelectorAll(`script[src*="${GTM_SERVER_URL}"]`);
-            existingGtmScripts.forEach(script => script.remove());
-            
-            // Create a new script element for GTM preview mode
-            const gtmScript = document.createElement('script');
-            gtmScript.async = true;
-            
-            // Create URL directly to GTM server with all preview parameters
-            const gtmUrl = new URL(`${GTM_SERVER_URL}gtm.js`);
-            gtmUrl.searchParams.set('id', GTM_ID);
-            
-            // Copy all preview-related parameters
-            ['gtm_preview', 'gtm_auth', 'gtm_debug'].forEach(param => {
-                if (urlParams.has(param)) {
-                    gtmUrl.searchParams.set(param, urlParams.get(param));
-                }
-            });
-            
-            // Disable all proxy interception for GTM URLs
-            window._gtm_preview_mode = true; // Flag to indicate preview mode
-            
-            gtmScript.src = gtmUrl.href;
-            document.head.appendChild(gtmScript);
-            
-            // Log preview mode setup
-            console.log('GTM Proxy: Preview mode script loaded directly from:', gtmUrl.href);
-            return; // Exit early, no need for proxy setup
-        }
-        
         // Regular mode - continue with proxy setup
-        window._gtm_preview_mode = false; // Ensure preview mode is off
         encryptionKey = await getEncryptionKey();
         if(encryptionKey) {
             console.log('GTM Proxy: Initialized successfully. Loading GTM...');

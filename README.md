@@ -38,23 +38,37 @@ Before you begin, you'll need:
 5. **Deploy the service**
 6. **Note your service URL** (e.g., `https://your-service-abc123.run.app`)
 
-### Step 2: Set Up Custom Domain
+### Step 2: Add to Your Website
+
+Add the following script to your website's `<head>` section:
+
+```html
+<script>(function(w,d,s,l,i,p,t,u){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s);j.async=true;t=new URLSearchParams(w.location.search);
+j.src=t.has('gtm_debug')?(u=new URL('gtm.js','https://sgtm.yourdomain.com/'),
+u.searchParams.set('id',i),t.forEach((v,k)=>u.searchParams.set(k,v)),u.href):
+'https://your-proxy-domain.com/';f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-XXXXX');</script>
+```
+
+Replace:
+- `GTM-XXXXX` with your GTM container ID
+- `https://your-proxy-domain.com` with your proxy service URL
+- `https://sgtm.yourdomain.com` with your GTM server-side container URL
+
+The script automatically:
+- Uses the proxy root URL for normal traffic
+- Switches to direct server-side container access for debug/preview mode with all parameters
+- Maintains all GTM functionality including preview mode
+
+### Step 3: Set Up Custom Domain
 
 1. **Choose a subdomain name**: Select a subdomain that won't trigger ad blockers. Avoid using obvious terms like 'gtm', 'analytics', or 'tracking'. Instead, use neutral terms like 'loading', 'assets', or 'static'
 2. **Configure Load Balancer** in your cloud provider
 3. **Set up DNS records** for your custom domain
 4. **Map the domain** to your service
 5. **Verify SSL/TLS** certificates are properly configured
-
-### Step 3: Update Your Website
-
-**Remove your existing GTM snippet** and replace it with:
-
-```html
-<script src="https://loading.yourdomain.com/"></script>
-```
-
-That's it! Replace `loading.yourdomain.com` with your actual custom domain configured in Step 2.
 
 ### Step 4: Test Your Implementation
 
