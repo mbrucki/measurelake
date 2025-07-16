@@ -1,4 +1,4 @@
-# GTM Ad-Blocker Bypass Service
+# MeasureLake - AdBlocker Shield
 
 Make sure your Google Tag Manager analytics continue working even when visitors use ad-blockers. This service routes your GTM requests through your own domain, making them invisible to ad-blocking software.
 
